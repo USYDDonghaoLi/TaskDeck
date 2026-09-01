@@ -227,6 +227,46 @@ final class TaskDatabase {
         }
     }
 
+    @discardableResult
+    func saveActiveFocus(
+        _ active: ActiveFocus,
+        matching expected: ActiveFocus?,
+        reason: String
+    ) throws -> Bool {
+        try mutateFocus(reason: reason) { database in
+            let persisted = try readActiveFocus(database)
+            guard focusIdentityMatches(persisted, expected) else { return false }
+            try writeActiveFocus(active, in: database)
+            return true
+        }
+    }
+
+    @discardableResult
+    func finishFocus(
+        _ session: FocusSession,
+        matching expected: ActiveFocus,
+        reason: String = "focus-finish"
+    ) throws -> Bool {
+        try mutateFocus(reason: reason) { database in
+            guard focusIdentityMatches(try readActiveFocus(database), expected) else { return false }
+            try insertFocusSession(session, in: database)
+            try execute(database, sql: "DELETE FROM focus_runtime WHERE singleton_id = 1")
+            return true
+        }
+    }
+
+    @discardableResult
+    func discardActiveFocus(
+        matching expected: ActiveFocus,
+        reason: String = "focus-discard"
+    ) throws -> Bool {
+        try mutateFocus(reason: reason) { database in
+            guard focusIdentityMatches(try readActiveFocus(database), expected) else { return false }
+            try execute(database, sql: "DELETE FROM focus_runtime WHERE singleton_id = 1")
+            return true
+        }
+    }
+
     func replaceAll(
         tasks: [TaskItem],
         sessions: [FocusSession],
@@ -249,6 +289,26 @@ final class TaskDatabase {
             do {
                 try changes(database)
                 try execute(database, sql: "COMMIT")
+            } catch {
+                try? execute(database, sql: "ROLLBACK")
+                throw error
+            }
+        }
+    }
+
+    private func mutateFocus(
+        reason: String,
+        changes: (OpaquePointer) throws -> Bool
+    ) throws -> Bool {
+        try requireWritable()
+        return try withConnection { database in
+            try configure(database)
+            try createBackup(from: database, reason: reason)
+            try execute(database, sql: "BEGIN IMMEDIATE TRANSACTION")
+            do {
+                let changed = try changes(database)
+                try execute(database, sql: "COMMIT")
+                return changed
             } catch {
                 try? execute(database, sql: "ROLLBACK")
                 throw error
@@ -612,40 +672,74 @@ final class TaskDatabase {
         in database: OpaquePointer
     ) throws {
         try execute(database, sql: "DELETE FROM focus_sessions; DELETE FROM focus_runtime;")
-        let sessionSQL = """
+        for session in sessions {
+            try insertFocusSession(session, in: database)
+        }
+        if let active {
+            try writeActiveFocus(active, in: database)
+        }
+    }
+
+    private func insertFocusSession(_ session: FocusSession, in database: OpaquePointer) throws {
+        let statement = try prepare(database, sql: """
         INSERT INTO focus_sessions (
             id, task_id, task_title, direction, started_at, ended_at, duration_seconds
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """
-        for session in sessions {
-            let statement = try prepare(database, sql: sessionSQL)
-            defer { sqlite3_finalize(statement) }
-            try bind(session.id.uuidString, to: statement, at: 1, database: database)
-            try bind(session.taskID.uuidString, to: statement, at: 2, database: database)
-            try bind(session.taskTitle, to: statement, at: 3, database: database)
-            try bind(session.direction, to: statement, at: 4, database: database)
-            sqlite3_bind_double(statement, 5, session.startedAt.timeIntervalSince1970)
-            sqlite3_bind_double(statement, 6, session.endedAt.timeIntervalSince1970)
-            sqlite3_bind_int(statement, 7, Int32(session.durationSeconds))
-            try stepDone(database, statement: statement)
-        }
+        ON CONFLICT(id) DO UPDATE SET
+            task_id = excluded.task_id,
+            task_title = excluded.task_title,
+            direction = excluded.direction,
+            started_at = excluded.started_at,
+            ended_at = excluded.ended_at,
+            duration_seconds = excluded.duration_seconds
+        """)
+        defer { sqlite3_finalize(statement) }
+        try bind(session.id.uuidString, to: statement, at: 1, database: database)
+        try bind(session.taskID.uuidString, to: statement, at: 2, database: database)
+        try bind(session.taskTitle, to: statement, at: 3, database: database)
+        try bind(session.direction, to: statement, at: 4, database: database)
+        sqlite3_bind_double(statement, 5, session.startedAt.timeIntervalSince1970)
+        sqlite3_bind_double(statement, 6, session.endedAt.timeIntervalSince1970)
+        sqlite3_bind_int(statement, 7, Int32(session.durationSeconds))
+        try stepDone(database, statement: statement)
+    }
 
-        if let active {
-            let statement = try prepare(database, sql: """
-            INSERT INTO focus_runtime (
-                singleton_id, task_id, task_title, direction, initiated_at,
-                estimated_minutes, running_since, accumulated_seconds
-            ) VALUES (1, ?, ?, ?, ?, ?, ?, ?)
-            """)
-            defer { sqlite3_finalize(statement) }
-            try bind(active.taskID.uuidString, to: statement, at: 1, database: database)
-            try bind(active.taskTitle, to: statement, at: 2, database: database)
-            try bind(active.direction, to: statement, at: 3, database: database)
-            sqlite3_bind_double(statement, 4, active.initiatedAt.timeIntervalSince1970)
-            sqlite3_bind_int(statement, 5, Int32(active.estimatedMinutes))
-            bind(active.runningSince, to: statement, at: 6)
-            sqlite3_bind_double(statement, 7, active.accumulatedSeconds)
-            try stepDone(database, statement: statement)
+    private func writeActiveFocus(_ active: ActiveFocus, in database: OpaquePointer) throws {
+        let statement = try prepare(database, sql: """
+        INSERT INTO focus_runtime (
+            singleton_id, task_id, task_title, direction, initiated_at,
+            estimated_minutes, running_since, accumulated_seconds
+        ) VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(singleton_id) DO UPDATE SET
+            task_id = excluded.task_id,
+            task_title = excluded.task_title,
+            direction = excluded.direction,
+            initiated_at = excluded.initiated_at,
+            estimated_minutes = excluded.estimated_minutes,
+            running_since = excluded.running_since,
+            accumulated_seconds = excluded.accumulated_seconds
+        """)
+        defer { sqlite3_finalize(statement) }
+        try bind(active.taskID.uuidString, to: statement, at: 1, database: database)
+        try bind(active.taskTitle, to: statement, at: 2, database: database)
+        try bind(active.direction, to: statement, at: 3, database: database)
+        sqlite3_bind_double(statement, 4, active.initiatedAt.timeIntervalSince1970)
+        sqlite3_bind_int(statement, 5, Int32(active.estimatedMinutes))
+        bind(active.runningSince, to: statement, at: 6)
+        sqlite3_bind_double(statement, 7, active.accumulatedSeconds)
+        try stepDone(database, statement: statement)
+    }
+
+    private func focusIdentityMatches(_ persisted: ActiveFocus?, _ expected: ActiveFocus?) -> Bool {
+        switch (persisted, expected) {
+        case (nil, nil):
+            return true
+        case let (persisted?, expected?):
+            return persisted.taskID == expected.taskID
+                && abs(persisted.initiatedAt.timeIntervalSince1970
+                    - expected.initiatedAt.timeIntervalSince1970) < 0.000_001
+        default:
+            return false
         }
     }
 

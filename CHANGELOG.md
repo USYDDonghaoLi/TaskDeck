@@ -2,6 +2,14 @@
 
 All notable TaskDeck changes are recorded here. Version numbers follow semantic versioning, while `CFBundleVersion` uses a monotonically increasing integer.
 
+## 1.9.1 (Build 11) - Focus History Safety
+
+- Replaced full-history focus writes with guarded, transactional updates for starting, pausing, resuming, finishing, and discarding a timer.
+- Preserved every existing focus session when a new session finishes.
+- Prevented stale app windows from ending or overwriting a newer active focus timer.
+- Added cross-window refresh notifications for task and focus changes.
+- Added an isolated regression test covering preserved history and stale-window rejection.
+
 ## 1.9.0 (Build 10) - Quality & Onboarding
 
 - Added a first-run bilingual onboarding experience for empty installations; existing users with tasks are never interrupted.

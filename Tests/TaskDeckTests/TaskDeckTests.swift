@@ -101,6 +101,67 @@ final class TaskDeckTests: XCTestCase {
         XCTAssertNil(tasks[0].deletedAt)
     }
 
+    func testFocusWritesPreserveHistoryAndRejectStaleWindows() throws {
+        try withTemporaryDatabase { databaseURL in
+            let database = try TaskDatabase(url: databaseURL)
+            let taskID = UUID()
+            let laterTaskID = UUID()
+            let start = Date(timeIntervalSince1970: 1_800_000_000)
+            let previous = FocusSession(
+                taskID: taskID,
+                taskTitle: "Previous focus",
+                direction: "Quality",
+                startedAt: start.addingTimeInterval(-600),
+                endedAt: start.addingTimeInterval(-300),
+                durationSeconds: 300
+            )
+            let active = ActiveFocus(
+                taskID: taskID,
+                taskTitle: "Current focus",
+                direction: "Quality",
+                initiatedAt: start,
+                estimatedMinutes: 25,
+                runningSince: start,
+                accumulatedSeconds: 0
+            )
+            try database.replaceFocus(sessions: [previous], active: active, reason: "test-seed")
+
+            let finished = FocusSession(
+                taskID: taskID,
+                taskTitle: active.taskTitle,
+                direction: active.direction,
+                startedAt: start,
+                endedAt: start.addingTimeInterval(120),
+                durationSeconds: 120
+            )
+            XCTAssertTrue(try database.finishFocus(finished, matching: active))
+            XCTAssertEqual(Set(try database.loadFocusSessions().map(\.id)), [previous.id, finished.id])
+
+            let newer = ActiveFocus(
+                taskID: laterTaskID,
+                taskTitle: "Newer focus",
+                direction: "Release",
+                initiatedAt: start.addingTimeInterval(180),
+                estimatedMinutes: 45,
+                runningSince: start.addingTimeInterval(180),
+                accumulatedSeconds: 0
+            )
+            XCTAssertTrue(try database.saveActiveFocus(newer, matching: nil, reason: "test-newer-start"))
+
+            let staleFinish = FocusSession(
+                taskID: taskID,
+                taskTitle: active.taskTitle,
+                direction: active.direction,
+                startedAt: start,
+                endedAt: start.addingTimeInterval(240),
+                durationSeconds: 240
+            )
+            XCTAssertFalse(try database.finishFocus(staleFinish, matching: active))
+            XCTAssertEqual(Set(try database.loadFocusSessions().map(\.id)), [previous.id, finished.id])
+            XCTAssertEqual(try database.loadActiveFocus()?.taskID, laterTaskID)
+        }
+    }
+
     private func withTemporaryDatabase(
         _ body: (URL) throws -> Void
     ) throws {

@@ -433,6 +433,7 @@ final class TaskStore: ObservableObject {
             persistenceError = nil
             if changed {
                 WidgetCenter.shared.reloadTimelines(ofKind: TaskDeckShared.widgetKind)
+                TaskDeckShared.notifyDataChanged()
             }
             return changed
         } catch {

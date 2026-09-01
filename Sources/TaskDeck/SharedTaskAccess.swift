@@ -93,6 +93,13 @@ enum TaskDeckShared {
             .replaceTasks(tasks, reason: "shared-task-save")
     }
 
+    static func notifyDataChanged() {
+        DistributedNotificationCenter.default().postNotificationName(
+            changeNotification,
+            object: nil
+        )
+    }
+
     @discardableResult
     static func toggleTask(
         id: UUID,
@@ -137,10 +144,7 @@ enum TaskDeckShared {
         }
 
         if changed {
-            DistributedNotificationCenter.default().postNotificationName(
-                changeNotification,
-                object: nil
-            )
+            notifyDataChanged()
         }
         return changed
     }

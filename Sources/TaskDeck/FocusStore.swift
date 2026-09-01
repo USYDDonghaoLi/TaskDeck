@@ -9,6 +9,7 @@ final class FocusStore: ObservableObject {
     let databaseURL: URL
     private let calendar: Calendar
     private var database: TaskDatabase?
+    private var sharedChangeObserver: NSObjectProtocol?
 
     init(
         databaseURL: URL? = nil,
@@ -31,24 +32,30 @@ final class FocusStore: ObservableObject {
             persistenceError = error.localizedDescription
             NSLog("TaskDeck could not initialize focus database: %@", error.localizedDescription)
         }
+        sharedChangeObserver = DistributedNotificationCenter.default().addObserver(
+            forName: TaskDeckShared.changeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.refreshFromDatabase() }
+        }
     }
 
     @discardableResult
     func beginOrToggle(_ task: TaskItem, now: Date = Date()) -> Bool {
-        if var active {
-            guard active.taskID == task.id else { return false }
-            if let runningSince = active.runningSince {
-                active.accumulatedSeconds += max(0, now.timeIntervalSince(runningSince))
-                active.runningSince = nil
+        if let current = active {
+            guard current.taskID == task.id else { return false }
+            var updated = current
+            if let runningSince = updated.runningSince {
+                updated.accumulatedSeconds += max(0, now.timeIntervalSince(runningSince))
+                updated.runningSince = nil
             } else {
-                active.runningSince = now
+                updated.runningSince = now
             }
-            self.active = active
-            persist(reason: "focus-toggle")
-            return true
+            return persistActive(updated, matching: current, reason: "focus-toggle")
         }
 
-        active = ActiveFocus(
+        let started = ActiveFocus(
             taskID: task.id,
             taskTitle: task.title,
             direction: task.normalizedDirection,
@@ -57,23 +64,22 @@ final class FocusStore: ObservableObject {
             runningSince: now,
             accumulatedSeconds: 0
         )
-        persist(reason: "focus-start")
-        return true
+        return persistActive(started, matching: nil, reason: "focus-start")
     }
 
     func pause(now: Date = Date()) {
-        guard var active, let runningSince = active.runningSince else { return }
-        active.accumulatedSeconds += max(0, now.timeIntervalSince(runningSince))
-        active.runningSince = nil
-        self.active = active
-        persist(reason: "focus-pause")
+        guard let current = active, let runningSince = current.runningSince else { return }
+        var updated = current
+        updated.accumulatedSeconds += max(0, now.timeIntervalSince(runningSince))
+        updated.runningSince = nil
+        _ = persistActive(updated, matching: current, reason: "focus-pause")
     }
 
     func resume(now: Date = Date()) {
-        guard var active, active.runningSince == nil else { return }
-        active.runningSince = now
-        self.active = active
-        persist(reason: "focus-resume")
+        guard let current = active, current.runningSince == nil else { return }
+        var updated = current
+        updated.runningSince = now
+        _ = persistActive(updated, matching: current, reason: "focus-resume")
     }
 
     @discardableResult
@@ -88,16 +94,34 @@ final class FocusStore: ObservableObject {
             endedAt: now,
             durationSeconds: seconds
         )
-        sessions.append(session)
-        sessions.sort { $0.endedAt > $1.endedAt }
-        self.active = nil
-        persist(reason: "focus-finish")
-        return session
+        guard let database else { return nil }
+        do {
+            let changed = try database.finishFocus(session, matching: active)
+            try load(from: database)
+            persistenceError = nil
+            if changed {
+                TaskDeckShared.notifyDataChanged()
+                return session
+            }
+            return nil
+        } catch {
+            persistenceError = error.localizedDescription
+            NSLog("TaskDeck could not finish focus data: %@", error.localizedDescription)
+            return nil
+        }
     }
 
     func discardActive() {
-        active = nil
-        persist(reason: "focus-discard")
+        guard let active, let database else { return }
+        do {
+            let changed = try database.discardActiveFocus(matching: active)
+            try load(from: database)
+            persistenceError = nil
+            if changed { TaskDeckShared.notifyDataChanged() }
+        } catch {
+            persistenceError = error.localizedDescription
+            NSLog("TaskDeck could not discard focus data: %@", error.localizedDescription)
+        }
     }
 
     func elapsed(at date: Date = Date()) -> TimeInterval {
@@ -148,14 +172,22 @@ final class FocusStore: ObservableObject {
         active = try database.loadActiveFocus()
     }
 
-    private func persist(reason: String) {
-        guard let database else { return }
+    private func persistActive(
+        _ updated: ActiveFocus,
+        matching expected: ActiveFocus?,
+        reason: String
+    ) -> Bool {
+        guard let database else { return false }
         do {
-            try database.replaceFocus(sessions: sessions, active: active, reason: reason)
+            let changed = try database.saveActiveFocus(updated, matching: expected, reason: reason)
+            try load(from: database)
             persistenceError = nil
+            if changed { TaskDeckShared.notifyDataChanged() }
+            return changed
         } catch {
             persistenceError = error.localizedDescription
             NSLog("TaskDeck could not save focus data: %@", error.localizedDescription)
+            return false
         }
     }
 }

@@ -11,6 +11,7 @@ extension Notification.Name {
 
 struct DashboardView: View {
     @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var focus: FocusStore
     @EnvironmentObject private var notifications: NotificationManager
     @EnvironmentObject private var language: LanguageStore
     @Environment(\.openWindow) private var openWindow
@@ -153,6 +154,7 @@ struct DashboardView: View {
         .onOpenURL(perform: openDeepLink)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             store.refreshFromDisk()
+            focus.refreshFromDatabase()
         }
         .onReceive(NotificationCenter.default.publisher(for: .taskDeckNewTask)) { _ in presentNewTask() }
         .onReceive(NotificationCenter.default.publisher(for: .taskDeckFocusSearch)) { _ in searchFocused = true }
