@@ -1,4 +1,5 @@
 import Foundation
+import WidgetKit
 
 @MainActor
 final class TaskStore: ObservableObject {
@@ -8,11 +9,19 @@ final class TaskStore: ObservableObject {
     private let fileURL: URL
     private let calendar: Calendar
     private var loadFailed = false
+    private var sharedChangeObserver: NSObjectProtocol?
 
     init(fileURL: URL? = nil, calendar: Calendar = .current) {
         self.calendar = calendar
         self.fileURL = fileURL ?? Self.defaultFileURL()
         load()
+        sharedChangeObserver = DistributedNotificationCenter.default().addObserver(
+            forName: TaskDeckShared.changeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.refreshFromDisk() }
+        }
     }
 
     var directions: [String] {
@@ -201,6 +210,17 @@ final class TaskStore: ObservableObject {
         return streak
     }
 
+    func refreshFromDisk() {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+        do {
+            tasks = try JSONDecoder.taskDeck.decode([TaskItem].self, from: Data(contentsOf: fileURL))
+            loadFailed = false
+            persistenceError = nil
+        } catch {
+            NSLog("TaskDeck could not reload shared tasks: %@", error.localizedDescription)
+        }
+    }
+
     private func load() {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         do {
@@ -230,6 +250,7 @@ final class TaskStore: ObservableObject {
             let data = try JSONEncoder.taskDeck.encode(tasks)
             try data.write(to: fileURL, options: .atomic)
             persistenceError = nil
+            WidgetCenter.shared.reloadTimelines(ofKind: TaskDeckShared.widgetKind)
         } catch {
             persistenceError = "任务保存失败，请保留应用并检查磁盘权限。"
             NSLog("TaskDeck could not save tasks: %@", error.localizedDescription)
@@ -263,7 +284,10 @@ final class TaskStore: ObservableObject {
 
     private static func defaultFileURL() -> URL {
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return root.appendingPathComponent("TaskDeck", isDirectory: true).appendingPathComponent("tasks.json")
+        let legacyURL = root
+            .appendingPathComponent("TaskDeck", isDirectory: true)
+            .appendingPathComponent("tasks.json")
+        return TaskDeckShared.prepareTaskFile(legacyURL: legacyURL)
     }
 
     private func nextOccurrence(after date: Date?, recurrence: TaskRecurrence) -> Date? {

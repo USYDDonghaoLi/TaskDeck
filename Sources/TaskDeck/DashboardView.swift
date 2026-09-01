@@ -12,6 +12,7 @@ struct DashboardView: View {
     @State private var reportPeriod: ReportPeriod = .day
     @State private var showingComposer = false
     @State private var editingTask: TaskItem?
+    @State private var highlightedTaskID: UUID?
 
     var body: some View {
         ZStack {
@@ -48,6 +49,7 @@ struct DashboardView: View {
                         TaskBoardView(
                             filter: filter,
                             direction: selectedDirection,
+                            highlightedTaskID: highlightedTaskID,
                             onEdit: presentEditor
                         )
                             .frame(minWidth: 470, maxWidth: .infinity, maxHeight: .infinity)
@@ -91,6 +93,10 @@ struct DashboardView: View {
                 window.minSize = NSSize(width: 1_020, height: 680)
             }
         )
+        .onOpenURL(perform: openDeepLink)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            store.refreshFromDisk()
+        }
     }
 
     private func presentNewTask() {
@@ -101,6 +107,31 @@ struct DashboardView: View {
     private func presentEditor(_ task: TaskItem) {
         editingTask = task
         showingComposer = true
+    }
+
+    private func openDeepLink(_ url: URL) {
+        guard url.scheme?.lowercased() == "taskdeck" else { return }
+
+        if url.host?.lowercased() == "today" {
+            filter = .today
+            selectedDirection = nil
+            highlightedTaskID = nil
+            return
+        }
+
+        guard
+            url.host?.lowercased() == "task",
+            let idText = url.pathComponents.dropFirst().first,
+            let id = UUID(uuidString: idText),
+            let task = store.tasks.first(where: { $0.id == id })
+        else { return }
+
+        filter = task.isCompleted ? .completed : .inbox
+        selectedDirection = task.normalizedDirection
+        highlightedTaskID = nil
+        DispatchQueue.main.async {
+            highlightedTaskID = id
+        }
     }
 
     private func localizedPersistenceError(_ error: String) -> String {

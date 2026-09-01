@@ -1,0 +1,215 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		200000000000000000000001 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000001 /* DashboardView.swift */; };
+		200000000000000000000002 /* DesktopWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000002 /* DesktopWidgetView.swift */; };
+		200000000000000000000003 /* FocusConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000003 /* FocusConsoleView.swift */; };
+		200000000000000000000004 /* FocusStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000004 /* FocusStore.swift */; };
+		200000000000000000000005 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000005 /* Localization.swift */; };
+		200000000000000000000006 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000006 /* NotificationManager.swift */; };
+		200000000000000000000007 /* PDFReportExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000007 /* PDFReportExporter.swift */; };
+		200000000000000000000008 /* ReportPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000008 /* ReportPanel.swift */; };
+		200000000000000000000009 /* SharedTaskAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000009 /* SharedTaskAccess.swift */; };
+		20000000000000000000000A /* TaskBoardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000A /* TaskBoardView.swift */; };
+		20000000000000000000000B /* TaskComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000B /* TaskComposerView.swift */; };
+		20000000000000000000000C /* TaskDeckApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000C /* TaskDeckApp.swift */; };
+		20000000000000000000000D /* TaskItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000D /* TaskItem.swift */; };
+		20000000000000000000000E /* TaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000E /* TaskStore.swift */; };
+		20000000000000000000000F /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000F /* Theme.swift */; };
+		210000000000000000000001 /* TaskDeckWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000001 /* TaskDeckWidget.swift */; };
+		210000000000000000000002 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000005 /* Localization.swift */; };
+		210000000000000000000003 /* SharedTaskAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000009 /* SharedTaskAccess.swift */; };
+		210000000000000000000004 /* TaskItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000D /* TaskItem.swift */; };
+		220000000000000000000001 /* TaskDeckWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 130000000000000000000002 /* TaskDeckWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		300000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000003;
+			remoteInfo = TaskDeckWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		400000000000000000000001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				220000000000000000000001 /* TaskDeckWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		100000000000000000000001 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		100000000000000000000002 /* DesktopWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopWidgetView.swift; sourceTree = "<group>"; };
+		100000000000000000000003 /* FocusConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusConsoleView.swift; sourceTree = "<group>"; };
+		100000000000000000000004 /* FocusStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusStore.swift; sourceTree = "<group>"; };
+		100000000000000000000005 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
+		100000000000000000000006 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		100000000000000000000007 /* PDFReportExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFReportExporter.swift; sourceTree = "<group>"; };
+		100000000000000000000008 /* ReportPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportPanel.swift; sourceTree = "<group>"; };
+		100000000000000000000009 /* SharedTaskAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTaskAccess.swift; sourceTree = "<group>"; };
+		10000000000000000000000A /* TaskBoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskBoardView.swift; sourceTree = "<group>"; };
+		10000000000000000000000B /* TaskComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskComposerView.swift; sourceTree = "<group>"; };
+		10000000000000000000000C /* TaskDeckApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDeckApp.swift; sourceTree = "<group>"; };
+		10000000000000000000000D /* TaskItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskItem.swift; sourceTree = "<group>"; };
+		10000000000000000000000E /* TaskStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskStore.swift; sourceTree = "<group>"; };
+		10000000000000000000000F /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		110000000000000000000001 /* TaskDeckWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDeckWidget.swift; sourceTree = "<group>"; };
+		110000000000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		120000000000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		120000000000000000000002 /* TaskDeck.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TaskDeck.entitlements; sourceTree = "<group>"; };
+		120000000000000000000003 /* TaskDeckWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TaskDeckWidget.entitlements; sourceTree = "<group>"; };
+		130000000000000000000001 /* TaskDeck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TaskDeck.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		130000000000000000000002 /* TaskDeckWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TaskDeckWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		500000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		500000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		600000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				600000000000000000000002 /* Sources */,
+				600000000000000000000004 /* WidgetExtension */,
+				600000000000000000000005 /* Assets */,
+				600000000000000000000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		600000000000000000000002 /* Sources */ = {isa = PBXGroup; children = (600000000000000000000003 /* TaskDeck */, ); path = Sources; sourceTree = "<group>"; };
+		600000000000000000000003 /* TaskDeck */ = {
+			isa = PBXGroup;
+			children = (
+				100000000000000000000001 /* DashboardView.swift */,
+				100000000000000000000002 /* DesktopWidgetView.swift */,
+				100000000000000000000003 /* FocusConsoleView.swift */,
+				100000000000000000000004 /* FocusStore.swift */,
+				100000000000000000000005 /* Localization.swift */,
+				100000000000000000000006 /* NotificationManager.swift */,
+				100000000000000000000007 /* PDFReportExporter.swift */,
+				100000000000000000000008 /* ReportPanel.swift */,
+				100000000000000000000009 /* SharedTaskAccess.swift */,
+				10000000000000000000000A /* TaskBoardView.swift */,
+				10000000000000000000000B /* TaskComposerView.swift */,
+				10000000000000000000000C /* TaskDeckApp.swift */,
+				10000000000000000000000D /* TaskItem.swift */,
+				10000000000000000000000E /* TaskStore.swift */,
+				10000000000000000000000F /* Theme.swift */,
+			);
+			path = TaskDeck;
+			sourceTree = "<group>";
+		};
+		600000000000000000000004 /* WidgetExtension */ = {isa = PBXGroup; children = (110000000000000000000001 /* TaskDeckWidget.swift */, 110000000000000000000002 /* Info.plist */, ); path = WidgetExtension; sourceTree = "<group>"; };
+		600000000000000000000005 /* Assets */ = {isa = PBXGroup; children = (120000000000000000000001 /* Info.plist */, 120000000000000000000002 /* TaskDeck.entitlements */, 120000000000000000000003 /* TaskDeckWidget.entitlements */, ); path = Assets; sourceTree = "<group>"; };
+		600000000000000000000006 /* Products */ = {isa = PBXGroup; children = (130000000000000000000001 /* TaskDeck.app */, 130000000000000000000002 /* TaskDeckWidget.appex */, ); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00000000000000000000002 /* TaskDeck */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 800000000000000000000002 /* Build configuration list for PBXNativeTarget "TaskDeck" */;
+			buildPhases = (700000000000000000000001 /* Sources */, 500000000000000000000001 /* Frameworks */, 700000000000000000000003 /* Resources */, 400000000000000000000001 /* Embed App Extensions */, );
+			buildRules = ();
+			dependencies = (900000000000000000000001 /* PBXTargetDependency */, );
+			name = TaskDeck;
+			productName = TaskDeck;
+			productReference = 130000000000000000000001 /* TaskDeck.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A00000000000000000000003 /* TaskDeckWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 800000000000000000000003 /* Build configuration list for PBXNativeTarget "TaskDeckWidget" */;
+			buildPhases = (700000000000000000000002 /* Sources */, 500000000000000000000002 /* Frameworks */, 700000000000000000000004 /* Resources */, );
+			buildRules = ();
+			dependencies = ();
+			name = TaskDeckWidget;
+			productName = TaskDeckWidget;
+			productReference = 130000000000000000000002 /* TaskDeckWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1540;
+				LastUpgradeCheck = 1540;
+				TargetAttributes = {
+					A00000000000000000000002 = {CreatedOnToolsVersion = 15.4; SystemCapabilities = {com.apple.ApplicationGroups = {enabled = 1; }; }; };
+					A00000000000000000000003 = {CreatedOnToolsVersion = 15.4; SystemCapabilities = {com.apple.ApplicationGroups = {enabled = 1; }; com.apple.Sandbox = {enabled = 1; }; }; };
+				};
+			};
+			buildConfigurationList = 800000000000000000000001 /* Build configuration list for PBXProject "TaskDeck" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = zh_CN;
+			hasScannedForEncodings = 0;
+			knownRegions = (Base, en, zh_CN, );
+			mainGroup = 600000000000000000000001;
+			productRefGroup = 600000000000000000000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (A00000000000000000000002 /* TaskDeck */, A00000000000000000000003 /* TaskDeckWidget */, );
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		700000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		700000000000000000000004 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		700000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				200000000000000000000001, 200000000000000000000002, 200000000000000000000003, 200000000000000000000004,
+				200000000000000000000005, 200000000000000000000006, 200000000000000000000007, 200000000000000000000008,
+				200000000000000000000009, 20000000000000000000000A, 20000000000000000000000B, 20000000000000000000000C,
+				20000000000000000000000D, 20000000000000000000000E, 20000000000000000000000F,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		700000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (210000000000000000000001, 210000000000000000000002, 210000000000000000000003, 210000000000000000000004, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		900000000000000000000001 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = A00000000000000000000003 /* TaskDeckWidget */; targetProxy = 300000000000000000000001 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		B00000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_TESTABILITY = YES; GCC_C_LANGUAGE_STANDARD = gnu17; MACOSX_DEPLOYMENT_TARGET = 13.0; ONLY_ACTIVE_ARCH = YES; SDKROOT = macosx; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
+		B00000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; GCC_C_LANGUAGE_STANDARD = gnu17; MACOSX_DEPLOYMENT_TARGET = 13.0; SDKROOT = macosx; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; name = Release; };
+		B00000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = Assets/TaskDeck.entitlements; CODE_SIGN_STYLE = Automatic; COMBINE_HIDPI_IMAGES = YES; CURRENT_PROJECT_VERSION = 5; DEVELOPMENT_TEAM = ""; ENABLE_APP_SANDBOX = NO; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Assets/Info.plist; MARKETING_VERSION = 1.4.0; PRODUCT_BUNDLE_IDENTIFIER = local.taskdeck.macos; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; }; name = Debug; };
+		B00000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = Assets/TaskDeck.entitlements; CODE_SIGN_STYLE = Automatic; COMBINE_HIDPI_IMAGES = YES; CURRENT_PROJECT_VERSION = 5; DEVELOPMENT_TEAM = ""; ENABLE_APP_SANDBOX = NO; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Assets/Info.plist; MARKETING_VERSION = 1.4.0; PRODUCT_BUNDLE_IDENTIFIER = local.taskdeck.macos; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; }; name = Release; };
+		B00000000000000000000005 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = Assets/TaskDeckWidget.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 5; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = WidgetExtension/Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", "@executable_path/../../../../Frameworks", ); MACOSX_DEPLOYMENT_TARGET = 14.0; MARKETING_VERSION = 1.4.0; PRODUCT_BUNDLE_IDENTIFIER = local.taskdeck.macos.widget; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; }; name = Debug; };
+		B00000000000000000000006 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = Assets/TaskDeckWidget.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 5; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = WidgetExtension/Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", "@executable_path/../../../../Frameworks", ); MACOSX_DEPLOYMENT_TARGET = 14.0; MARKETING_VERSION = 1.4.0; PRODUCT_BUNDLE_IDENTIFIER = local.taskdeck.macos.widget; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		800000000000000000000001 /* Build configuration list for PBXProject "TaskDeck" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000001 /* Debug */, B00000000000000000000002 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		800000000000000000000002 /* Build configuration list for PBXNativeTarget "TaskDeck" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000003 /* Debug */, B00000000000000000000004 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		800000000000000000000003 /* Build configuration list for PBXNativeTarget "TaskDeckWidget" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000005 /* Debug */, B00000000000000000000006 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = A00000000000000000000001 /* Project object */;
+}

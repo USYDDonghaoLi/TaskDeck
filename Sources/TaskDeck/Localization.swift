@@ -13,17 +13,27 @@ enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
 
 @MainActor
 final class LanguageStore: ObservableObject {
-    static let defaultsKey = "TaskDeck.appLanguage"
+    nonisolated static let defaultsKey = "TaskDeck.appLanguage"
     private let defaults: UserDefaults
+    private let syncsSharedDefaults: Bool
 
     @Published var current: AppLanguage {
-        didSet { defaults.set(current.rawValue, forKey: Self.defaultsKey) }
+        didSet {
+            defaults.set(current.rawValue, forKey: Self.defaultsKey)
+            if syncsSharedDefaults {
+                TaskDeckShared.storeLanguage(current)
+            }
+        }
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, syncsSharedDefaults: Bool = true) {
         self.defaults = defaults
+        self.syncsSharedDefaults = syncsSharedDefaults
         current = defaults.string(forKey: Self.defaultsKey)
             .flatMap(AppLanguage.init(rawValue:)) ?? .simplifiedChinese
+        if syncsSharedDefaults {
+            TaskDeckShared.storeLanguage(current)
+        }
     }
 
     func text(_ chinese: String, _ english: String) -> String {

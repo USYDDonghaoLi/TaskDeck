@@ -5,12 +5,61 @@ struct LogicCheck {
     @MainActor
     static func main() throws {
         try checkLegacyMigration()
+        try checkSharedStorageMigration()
         try checkCorruptDataProtection()
         try checkTaskLifecycle()
         try checkFocusLifecycle()
         try checkCompletionStreak()
         checkLanguagePreference()
         print("TaskDeck logic checks passed")
+    }
+
+    private static func checkSharedStorageMigration() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TaskDeckSharedStorageCheck-\(UUID().uuidString)")
+        let legacyURL = root.appendingPathComponent("Legacy/tasks.json")
+        let groupRoot = root.appendingPathComponent("GroupContainer")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(
+            at: legacyURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let recurring = TaskItem(
+            direction: "升级安全",
+            title: "保留原任务并共享给 Widget",
+            estimatedMinutes: 20,
+            dueAt: Date(timeIntervalSince1970: 1_788_200_000),
+            recurrence: .daily
+        )
+        try TaskDeckShared.saveTasks([recurring], to: legacyURL)
+        let originalData = try Data(contentsOf: legacyURL)
+
+        let sharedURL = TaskDeckShared.prepareTaskFile(
+            legacyURL: legacyURL,
+            groupRoot: groupRoot
+        )
+        precondition(FileManager.default.fileExists(atPath: sharedURL.path))
+        let copiedData = try Data(contentsOf: sharedURL)
+        precondition(copiedData == originalData)
+
+        let completedAt = Date(timeIntervalSince1970: 1_788_200_500)
+        let didToggle = try TaskDeckShared.toggleTask(id: recurring.id, at: sharedURL, now: completedAt)
+        precondition(didToggle)
+        let sharedTasks = try TaskDeckShared.loadTasks(from: sharedURL)
+        precondition(sharedTasks.first(where: { $0.id == recurring.id })?.completedAt == completedAt)
+        precondition(sharedTasks.count == 2)
+
+        // The migration is a copy. The user's old file is never moved, deleted,
+        // or overwritten by a Widget action.
+        let legacyDataAfterToggle = try Data(contentsOf: legacyURL)
+        precondition(legacyDataAfterToggle == originalData)
+        let preparedAgain = TaskDeckShared.prepareTaskFile(
+            legacyURL: legacyURL,
+            groupRoot: groupRoot
+        )
+        let preparedTasks = try TaskDeckShared.loadTasks(from: preparedAgain)
+        precondition(preparedTasks.count == 2)
     }
 
     @MainActor
@@ -216,7 +265,7 @@ struct LogicCheck {
         }
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let language = LanguageStore(defaults: defaults)
+        let language = LanguageStore(defaults: defaults, syncsSharedDefaults: false)
         precondition(language.current == .simplifiedChinese)
         precondition(TaskFilter.today.title(in: language.current) == "今日任务")
 

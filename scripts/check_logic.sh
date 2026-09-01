@@ -14,6 +14,7 @@ env SDKROOT="$SDK_PATH" CLANG_MODULE_CACHE_PATH="$MODULE_CACHE" \
     -module-cache-path "$MODULE_CACHE" \
     "$PROJECT_ROOT/Sources/TaskDeck/Localization.swift" \
     "$PROJECT_ROOT/Sources/TaskDeck/TaskItem.swift" \
+    "$PROJECT_ROOT/Sources/TaskDeck/SharedTaskAccess.swift" \
     "$PROJECT_ROOT/Sources/TaskDeck/TaskStore.swift" \
     "$PROJECT_ROOT/Sources/TaskDeck/FocusStore.swift" \
     "$PROJECT_ROOT/scripts/logic_check.swift" \

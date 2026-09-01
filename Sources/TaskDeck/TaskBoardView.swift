@@ -5,6 +5,7 @@ struct TaskBoardView: View {
     @EnvironmentObject private var language: LanguageStore
     let filter: TaskFilter
     let direction: String?
+    let highlightedTaskID: UUID?
     let onEdit: (TaskItem) -> Void
 
     private var tasks: [TaskItem] { store.tasks(for: filter, direction: direction) }
@@ -16,40 +17,53 @@ struct TaskBoardView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 22) {
-                TodayPulse()
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 22) {
+                    TodayPulse()
 
-                if groupedTasks.isEmpty {
-                    EmptyTasksView(filter: filter)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 54)
-                } else {
-                    ForEach(groupedTasks, id: \.0) { group in
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text("// \((group.0 == "未分类" ? language.text("未分类", "Uncategorized") : group.0).uppercased())")
-                                    .font(.system(size: 9, weight: .black))
-                                    .foregroundStyle(DeckTheme.cyan)
-                                    .tracking(1.2)
-                                Rectangle()
-                                    .fill(DeckTheme.border)
-                                    .frame(height: 1)
-                                Text("\(group.1.count)")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(DeckTheme.muted)
-                            }
+                    if groupedTasks.isEmpty {
+                        EmptyTasksView(filter: filter)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 54)
+                    } else {
+                        ForEach(groupedTasks, id: \.0) { group in
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack {
+                                    Text("// \((group.0 == "未分类" ? language.text("未分类", "Uncategorized") : group.0).uppercased())")
+                                        .font(.system(size: 9, weight: .black))
+                                        .foregroundStyle(DeckTheme.cyan)
+                                        .tracking(1.2)
+                                    Rectangle()
+                                        .fill(DeckTheme.border)
+                                        .frame(height: 1)
+                                    Text("\(group.1.count)")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(DeckTheme.muted)
+                                }
 
-                            ForEach(group.1) { task in
-                                TaskCard(task: task, onEdit: onEdit)
+                                ForEach(group.1) { task in
+                                    TaskCard(
+                                        task: task,
+                                        isHighlighted: task.id == highlightedTaskID,
+                                        onEdit: onEdit
+                                    )
+                                    .id(task.id)
+                                }
                             }
                         }
                     }
                 }
+                .padding(24)
             }
-            .padding(24)
+            .scrollIndicators(.never)
+            .onChange(of: highlightedTaskID) { target in
+                guard let target else { return }
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo(target, anchor: .center)
+                }
+            }
         }
-        .scrollIndicators(.never)
     }
 }
 
@@ -131,6 +145,7 @@ private struct TaskCard: View {
     @EnvironmentObject private var focus: FocusStore
     @EnvironmentObject private var language: LanguageStore
     let task: TaskItem
+    let isHighlighted: Bool
     let onEdit: (TaskItem) -> Void
 
     var body: some View {
@@ -245,8 +260,12 @@ private struct TaskCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(task.isCompleted ? DeckTheme.border.opacity(0.5) : DeckTheme.border)
+                .stroke(
+                    isHighlighted ? DeckTheme.cyan : (task.isCompleted ? DeckTheme.border.opacity(0.5) : DeckTheme.border),
+                    lineWidth: isHighlighted ? 2 : 1
+                )
         )
+        .shadow(color: isHighlighted ? DeckTheme.cyan.opacity(0.35) : .clear, radius: 10)
         .overlay(alignment: .leading) {
             if task.priority != .normal && !task.isCompleted {
                 RoundedRectangle(cornerRadius: 2)
