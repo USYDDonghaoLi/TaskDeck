@@ -5,6 +5,7 @@ struct DesktopWidgetView: View {
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var notifications: NotificationManager
     @EnvironmentObject private var focus: FocusStore
+    @EnvironmentObject private var language: LanguageStore
     @State private var showingComposer = false
     @State private var editingTask: TaskItem?
 
@@ -23,7 +24,7 @@ struct DesktopWidgetView: View {
                         Text("TASKDECK // DESKTOP")
                             .font(.system(size: 10, weight: .black))
                             .tracking(1.0)
-                        Text(Date.now.formatted(.dateTime.weekday(.wide).month().day().locale(Locale(identifier: "zh_CN"))))
+                        Text(Date.now.formatted(.dateTime.weekday(.wide).month().day().locale(language.current.locale)))
                             .font(.system(size: 8, weight: .medium))
                             .foregroundStyle(DeckTheme.muted)
                     }
@@ -52,7 +53,7 @@ struct DesktopWidgetView: View {
 
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("今日推进")
+                        Text(language.text("今日推进", "Today's Progress"))
                             .font(.system(size: 11, weight: .black))
                         Text("\(store.todayCompleted.count) DONE / \(store.todayPending.count) PENDING")
                             .font(.system(size: 7, weight: .bold))
@@ -83,9 +84,9 @@ struct DesktopWidgetView: View {
                                 Image(systemName: "checkmark.seal.fill")
                                     .font(.system(size: 27, weight: .light))
                                     .foregroundStyle(DeckTheme.lime)
-                                Text("队列已清空")
+                                Text(language.text("队列已清空", "Queue Cleared"))
                                     .font(.system(size: 10, weight: .bold))
-                                Text("享受片刻安静，或者注入新的任务。")
+                                Text(language.text("享受片刻安静，或者注入新的任务。", "Enjoy the quiet, or inject a new task."))
                                     .font(.system(size: 8))
                                     .foregroundStyle(DeckTheme.muted)
                             }
@@ -110,6 +111,7 @@ struct DesktopWidgetView: View {
             TaskComposerView(editingTask: editingTask)
                 .environmentObject(store)
                 .environmentObject(notifications)
+                .environmentObject(language)
         }
         .background(
             WindowAccessor { window in
@@ -128,6 +130,7 @@ private struct DesktopTaskRow: View {
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var notifications: NotificationManager
     @EnvironmentObject private var focus: FocusStore
+    @EnvironmentObject private var language: LanguageStore
     let task: TaskItem
     let onEdit: () -> Void
 
@@ -155,10 +158,10 @@ private struct DesktopTaskRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 9) {
                     if task.priority != .normal {
-                        Label(task.priority.title, systemImage: task.priority.symbol)
+                        Label(task.priority.title(in: language.current), systemImage: task.priority.symbol)
                             .foregroundStyle(task.priority == .urgent ? DeckTheme.warning : DeckTheme.violet)
                     }
-                    Text(task.normalizedDirection.uppercased())
+                    Text(task.displayDirection(in: language.current).uppercased())
                     Label("\(task.estimatedMinutes)M", systemImage: "timer")
                     if let dueAt = task.dueAt {
                         Label(dueAt.formatted(date: .omitted, time: .shortened), systemImage: task.reminderEnabled ? "bell.fill" : "clock")
@@ -195,6 +198,7 @@ private struct DesktopTaskRow: View {
 
 private struct DesktopFocusStrip: View {
     @EnvironmentObject private var focus: FocusStore
+    @EnvironmentObject private var language: LanguageStore
 
     var body: some View {
         if let active = focus.active {
@@ -213,7 +217,9 @@ private struct DesktopFocusStrip: View {
                         Text(active.taskTitle)
                             .font(.system(size: 8, weight: .bold))
                             .lineLimit(1)
-                        Text(active.isPaused ? "PAUSED" : "FOCUS ACTIVE")
+                        Text(active.isPaused
+                            ? language.text("已暂停", "PAUSED")
+                            : language.text("专注进行中", "FOCUS ACTIVE"))
                             .font(.system(size: 6, weight: .black))
                             .foregroundStyle(active.isPaused ? DeckTheme.lime : DeckTheme.cyan)
                             .tracking(0.7)
@@ -222,7 +228,7 @@ private struct DesktopFocusStrip: View {
                     Text(format(Int(focus.elapsed(at: context.date))))
                         .font(.system(size: 13, weight: .black))
                         .monospacedDigit()
-                    Button("结束") { _ = focus.finish() }
+                    Button(language.text("结束", "Finish")) { _ = focus.finish() }
                         .buttonStyle(.plain)
                         .font(.system(size: 7, weight: .black))
                         .foregroundStyle(DeckTheme.muted)

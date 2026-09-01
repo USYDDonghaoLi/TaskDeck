@@ -9,6 +9,7 @@ struct PDFReportPayload {
     let focusSessions: [FocusSession]
     let streak: Int
     let generatedAt: Date
+    let language: AppLanguage
 }
 
 enum PDFReportError: LocalizedError {
@@ -75,22 +76,29 @@ private final class PDFRenderer {
         let actual = payload.focusSessions.reduce(0) { $0 + $1.durationSeconds }
         let cardWidth: CGFloat = 116
         let gap: CGFloat = 11
-        drawMetricCard(x: margin, value: "\(payload.completedTasks.count)", label: "COMPLETED", color: lime)
-        drawMetricCard(x: margin + cardWidth + gap, value: duration(actual), label: "ACTUAL FOCUS", color: cyan)
-        drawMetricCard(x: margin + (cardWidth + gap) * 2, value: "\(payload.streak) DAYS", label: "CURRENT STREAK", color: orange)
-        drawMetricCard(x: margin + (cardWidth + gap) * 3, value: duration(estimated), label: "ESTIMATED", color: violet)
+        drawMetricCard(x: margin, value: "\(payload.completedTasks.count)", label: tr("已完成", "COMPLETED"), color: lime)
+        drawMetricCard(x: margin + cardWidth + gap, value: duration(actual), label: tr("实际专注", "ACTUAL FOCUS"), color: cyan)
+        drawMetricCard(
+            x: margin + (cardWidth + gap) * 2,
+            value: payload.language == .simplifiedChinese ? "\(payload.streak) 天" : "\(payload.streak) DAYS",
+            label: tr("连续完成", "CURRENT STREAK"),
+            color: orange
+        )
+        drawMetricCard(x: margin + (cardWidth + gap) * 3, value: duration(estimated), label: tr("预计投入", "ESTIMATED"), color: violet)
 
-        drawSectionTitle("ACTIVITY HEATMAP // 12 WEEKS", y: 247)
+        drawSectionTitle(tr("活动热力图 // 12 周", "ACTIVITY HEATMAP // 12 WEEKS"), y: 247)
         drawHeatmap(y: 278)
 
-        drawSectionTitle("DIRECTION BREAKDOWN", y: 386)
+        drawSectionTitle(tr("方向完成分布", "DIRECTION BREAKDOWN"), y: 386)
         drawDirectionRows(y: 418)
 
-        drawSectionTitle("COMPLETED TASKS", y: 554)
+        drawSectionTitle(tr("已完成任务", "COMPLETED TASKS"), y: 554)
         if payload.completedTasks.count > firstPageCount {
             let hiddenCount = payload.completedTasks.count - firstPageCount
             drawText(
-                "LATEST \(firstPageCount) · \(hiddenCount) MORE IN TASKDECK",
+                payload.language == .simplifiedChinese
+                    ? "最近 \(firstPageCount) 项 · 另有 \(hiddenCount) 项可在 TASKDECK 查看"
+                    : "LATEST \(firstPageCount) · \(hiddenCount) MORE IN TASKDECK",
                 in: CGRect(x: 290, y: 554, width: 259, height: 17),
                 font: mono(size: 6.5, weight: .semibold),
                 color: muted,
@@ -98,7 +106,7 @@ private final class PDFRenderer {
             )
         }
         if tasks.isEmpty {
-            drawText("此周期暂无完成记录。", in: CGRect(x: margin, y: 592, width: 500, height: 30), font: .systemFont(ofSize: 10), color: muted)
+            drawText(tr("此周期暂无完成记录。", "No completed tasks in this period."), in: CGRect(x: margin, y: 592, width: 500, height: 30), font: .systemFont(ofSize: 10), color: muted)
         } else {
             for (index, task) in tasks.enumerated() {
                 drawTaskRow(task, y: 584 + CGFloat(index) * 39)
@@ -156,20 +164,27 @@ private final class PDFRenderer {
             }
         }
 
-        drawText("完成任务与每 25 分钟专注都会提高活跃度", in: CGRect(x: 230, y: y + 31, width: 310, height: 30), font: .systemFont(ofSize: 8), color: muted, alignment: .right)
+        drawText(
+            tr("完成任务与每 25 分钟专注都会提高活跃度", "Tasks and every 25 focus minutes increase activity"),
+            in: CGRect(x: 230, y: y + 31, width: 310, height: 30),
+            font: .systemFont(ofSize: 8),
+            color: muted,
+            alignment: .right
+        )
     }
 
     private func drawDirectionRows(y: CGFloat) {
         let rows = directionRows
         if rows.isEmpty {
-            drawText("暂无方向数据", in: CGRect(x: margin, y: y, width: 300, height: 20), font: .systemFont(ofSize: 9), color: muted)
+            drawText(tr("暂无方向数据", "No direction data"), in: CGRect(x: margin, y: y, width: 300, height: 20), font: .systemFont(ofSize: 9), color: muted)
             return
         }
 
         let maxCount = max(1, rows.map(\.count).max() ?? 1)
         for (index, row) in rows.prefix(4).enumerated() {
             let rowY = y + CGFloat(index) * 31
-            drawText(row.direction, in: CGRect(x: margin, y: rowY, width: 155, height: 16), font: .systemFont(ofSize: 9, weight: .semibold), color: ink)
+            let direction = row.direction == "未分类" ? tr("未分类", "Uncategorized") : row.direction
+            drawText(direction, in: CGRect(x: margin, y: rowY, width: 155, height: 16), font: .systemFont(ofSize: 9, weight: .semibold), color: ink)
             drawText("\(row.count) TASKS · \(duration(row.seconds))", in: CGRect(x: 405, y: rowY, width: 140, height: 16), font: mono(size: 7, weight: .bold), color: muted, alignment: .right)
             rule.setFill()
             NSBezierPath(roundedRect: CGRect(x: margin, y: rowY + 19, width: 499, height: 4), xRadius: 2, yRadius: 2).fill()
@@ -186,7 +201,7 @@ private final class PDFRenderer {
         NSBezierPath(ovalIn: CGRect(x: margin + 10, y: y + (height - 7) / 2, width: 7, height: 7)).fill()
         drawText(task.title, in: CGRect(x: margin + 27, y: y + 6, width: 300, height: 16), font: .systemFont(ofSize: compact ? 8.5 : 9, weight: .semibold), color: ink)
         let actualSeconds = payload.focusSessions.filter { $0.taskID == task.id }.reduce(0) { $0 + $1.durationSeconds }
-        let metadata = "\(task.normalizedDirection) · EST \(task.estimatedMinutes)M · ACT \(actualSeconds / 60)M"
+        let metadata = "\(task.displayDirection(in: payload.language)) · EST \(task.estimatedMinutes)M · ACT \(actualSeconds / 60)M"
         drawText(metadata, in: CGRect(x: 355, y: y + 7, width: 184, height: 14), font: mono(size: 6.5, weight: .semibold), color: muted, alignment: .right)
     }
 
@@ -206,8 +221,8 @@ private final class PDFRenderer {
 
     private func drawFooter(page: Int, total: Int) {
         drawLine(y: 806)
-        let generated = payload.generatedAt.formatted(.dateTime.year().month(.twoDigits).day(.twoDigits).hour().minute())
-        drawText("Generated locally by TaskDeck · \(generated)", in: CGRect(x: margin, y: 816, width: 360, height: 14), font: mono(size: 6.5, weight: .medium), color: muted)
+        let generated = localizedDate(payload.generatedAt, includeTime: true)
+        drawText(tr("由 TaskDeck 在本地生成", "Generated locally by TaskDeck") + " · \(generated)", in: CGRect(x: margin, y: 816, width: 360, height: 14), font: mono(size: 6.5, weight: .medium), color: muted)
         drawText("PAGE \(page) / \(total)", in: CGRect(x: 450, y: 816, width: 99, height: 14), font: mono(size: 6.5, weight: .bold), color: muted, alignment: .right)
     }
 
@@ -245,9 +260,22 @@ private final class PDFRenderer {
     }
 
     private var intervalText: String {
-        let start = payload.interval.start.formatted(.dateTime.year().month(.twoDigits).day(.twoDigits))
-        let end = payload.interval.end.addingTimeInterval(-1).formatted(.dateTime.year().month(.twoDigits).day(.twoDigits))
+        let start = localizedDate(payload.interval.start)
+        let end = localizedDate(payload.interval.end.addingTimeInterval(-1))
         return "\(start) - \(end)"
+    }
+
+    private func localizedDate(_ date: Date, includeTime: Bool = false) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = payload.language.locale
+        formatter.dateFormat = includeTime
+            ? (payload.language == .simplifiedChinese ? "yyyy/MM/dd HH:mm" : "dd/MM/yyyy HH:mm")
+            : (payload.language == .simplifiedChinese ? "yyyy/MM/dd" : "dd/MM/yyyy")
+        return formatter.string(from: date)
+    }
+
+    private func tr(_ chinese: String, _ english: String) -> String {
+        payload.language == .simplifiedChinese ? chinese : english
     }
 
     private func activityLevel(on date: Date) -> Int {

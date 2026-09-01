@@ -8,10 +8,14 @@ enum TaskPriority: String, Codable, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
 
     var title: String {
+        title(in: .simplifiedChinese)
+    }
+
+    func title(in language: AppLanguage) -> String {
         switch self {
-        case .normal: return "普通"
-        case .important: return "重要"
-        case .urgent: return "紧急"
+        case .normal: return language == .simplifiedChinese ? "普通" : "Normal"
+        case .important: return language == .simplifiedChinese ? "重要" : "Important"
+        case .urgent: return language == .simplifiedChinese ? "紧急" : "Urgent"
         }
     }
 
@@ -42,12 +46,16 @@ enum TaskRecurrence: String, Codable, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
 
     var title: String {
+        title(in: .simplifiedChinese)
+    }
+
+    func title(in language: AppLanguage) -> String {
         switch self {
-        case .none: return "不重复"
-        case .daily: return "每天"
-        case .weekdays: return "工作日"
-        case .weekly: return "每周"
-        case .monthly: return "每月"
+        case .none: return language == .simplifiedChinese ? "不重复" : "Never"
+        case .daily: return language == .simplifiedChinese ? "每天" : "Daily"
+        case .weekdays: return language == .simplifiedChinese ? "工作日" : "Weekdays"
+        case .weekly: return language == .simplifiedChinese ? "每周" : "Weekly"
+        case .monthly: return language == .simplifiedChinese ? "每月" : "Monthly"
         }
     }
 
@@ -102,6 +110,10 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         direction.isEmpty ? "未分类" : direction
     }
 
+    func displayDirection(in language: AppLanguage) -> String {
+        direction.isEmpty && language == .english ? "Uncategorized" : normalizedDirection
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id
         case direction
@@ -140,11 +152,19 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
 }
 
 enum TaskFilter: String, CaseIterable, Identifiable {
-    case today = "今日任务"
-    case inbox = "全部任务"
-    case completed = "已完成"
+    case today
+    case inbox
+    case completed
 
     var id: String { rawValue }
+
+    func title(in language: AppLanguage) -> String {
+        switch self {
+        case .today: return language == .simplifiedChinese ? "今日任务" : "Today"
+        case .inbox: return language == .simplifiedChinese ? "全部任务" : "All Tasks"
+        case .completed: return language == .simplifiedChinese ? "已完成" : "Completed"
+        }
+    }
 
     var symbol: String {
         switch self {
@@ -156,11 +176,27 @@ enum TaskFilter: String, CaseIterable, Identifiable {
 }
 
 enum ReportPeriod: String, CaseIterable, Identifiable {
-    case day = "日"
-    case week = "周"
-    case month = "月"
+    case day
+    case week
+    case month
 
     var id: String { rawValue }
+
+    func title(in language: AppLanguage) -> String {
+        switch self {
+        case .day: return language == .simplifiedChinese ? "日" : "Day"
+        case .week: return language == .simplifiedChinese ? "周" : "Week"
+        case .month: return language == .simplifiedChinese ? "月" : "Month"
+        }
+    }
+
+    func reportTitle(in language: AppLanguage) -> String {
+        switch self {
+        case .day: return language == .simplifiedChinese ? "日度行动报告" : "Daily Action Report"
+        case .week: return language == .simplifiedChinese ? "周度行动报告" : "Weekly Action Report"
+        case .month: return language == .simplifiedChinese ? "月度行动报告" : "Monthly Action Report"
+        }
+    }
 }
 
 struct ReportSnapshot: Equatable {

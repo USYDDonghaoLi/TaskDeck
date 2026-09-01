@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct ReportPanel: View {
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var focus: FocusStore
+    @EnvironmentObject private var language: LanguageStore
     @Binding var period: ReportPeriod
     @State private var copied = false
     @State private var pdfExported = false
@@ -22,10 +23,14 @@ struct ReportPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                        MetricCard(value: "\(report.completedCount)", label: "DONE", color: DeckTheme.lime)
-                        MetricCard(value: durationText(seconds: focusSeconds), label: "ACTUAL FOCUS", color: DeckTheme.cyan)
-                        MetricCard(value: "\(store.completionStreak()) DAYS", label: "STREAK", color: DeckTheme.warning)
-                        MetricCard(value: durationText(minutes: report.estimatedMinutes), label: "ESTIMATE", color: DeckTheme.violet)
+                        MetricCard(value: "\(report.completedCount)", label: language.text("已完成", "DONE"), color: DeckTheme.lime)
+                        MetricCard(value: durationText(seconds: focusSeconds), label: language.text("实际专注", "ACTUAL FOCUS"), color: DeckTheme.cyan)
+                        MetricCard(
+                            value: language.format("%d 天", "%d DAYS", store.completionStreak()),
+                            label: language.text("连续完成", "STREAK"),
+                            color: DeckTheme.warning
+                        )
+                        MetricCard(value: durationText(minutes: report.estimatedMinutes), label: language.text("预计投入", "ESTIMATE"), color: DeckTheme.violet)
                     }
 
                     ActivityHeatmap()
@@ -33,7 +38,7 @@ struct ReportPanel: View {
 
                     if !focusSessions.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            sectionHeader(title: "专注记录", count: focusSessions.count, suffix: "SESSIONS")
+                            sectionHeader(title: language.text("专注记录", "Focus Sessions"), count: focusSessions.count, suffix: language.text("次", "SESSIONS"))
                             ForEach(focusSessions.prefix(6)) { session in
                                 FocusLogRow(session: session)
                             }
@@ -41,14 +46,14 @@ struct ReportPanel: View {
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
-                        sectionHeader(title: "已完成记录", count: report.completedCount, suffix: "ITEMS")
+                        sectionHeader(title: language.text("已完成记录", "Completed Tasks"), count: report.completedCount, suffix: language.text("项", "ITEMS"))
 
                         if report.completed.isEmpty {
                             VStack(spacing: 8) {
                                 Image(systemName: "waveform.path.ecg")
                                     .font(.system(size: 18, weight: .light))
                                     .foregroundStyle(DeckTheme.cyan.opacity(0.7))
-                                Text("此周期暂无完成记录")
+                                Text(language.text("此周期暂无完成记录", "No completed tasks in this period"))
                                     .font(.system(size: 9))
                                     .foregroundStyle(DeckTheme.muted)
                             }
@@ -68,13 +73,13 @@ struct ReportPanel: View {
             .scrollIndicators(.never)
         }
         .background(DeckTheme.panel.opacity(0.42))
-        .alert("PDF 导出失败", isPresented: Binding(
+        .alert(language.text("PDF 导出失败", "PDF Export Failed"), isPresented: Binding(
             get: { exportError != nil },
             set: { if !$0 { exportError = nil } }
         )) {
-            Button("知道了", role: .cancel) { exportError = nil }
+            Button(language.text("知道了", "OK"), role: .cancel) { exportError = nil }
         } message: {
-            Text(exportError ?? "未知错误")
+            Text(exportError ?? language.text("未知错误", "Unknown error"))
         }
     }
 
@@ -86,7 +91,7 @@ struct ReportPanel: View {
                         .font(.system(size: 8, weight: .black))
                         .foregroundStyle(DeckTheme.cyan)
                         .tracking(1.4)
-                    Text("战绩报告")
+                    Text(language.text("战绩报告", "Activity Report"))
                         .font(.system(size: 16, weight: .black))
                 }
                 Spacer()
@@ -99,7 +104,7 @@ struct ReportPanel: View {
                         .clipShape(RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
-                .help("导出排版 PDF 报告")
+                .help(language.text("导出排版 PDF 报告", "Export a formatted PDF report"))
 
                 Button(action: copyReport) {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
@@ -110,12 +115,12 @@ struct ReportPanel: View {
                         .clipShape(RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
-                .help("复制 Markdown 报告")
+                .help(language.text("复制 Markdown 报告", "Copy Markdown report"))
             }
 
             HStack(spacing: 3) {
                 ForEach(ReportPeriod.allCases) { item in
-                    Button(item.rawValue) { period = item }
+                    Button(item.title(in: language.current)) { period = item }
                         .buttonStyle(.plain)
                         .font(.system(size: 9, weight: .black))
                         .foregroundStyle(period == item ? DeckTheme.void : DeckTheme.muted)
@@ -166,15 +171,21 @@ struct ReportPanel: View {
 
     private func copyReport() {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.locale = language.current.locale
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
         let lines = report.completed.map { task in
             let actual = focus.seconds(for: task.id, in: report.interval) / 60
-            return "- [x] [\(task.normalizedDirection)] \(task.title)（预计 \(task.estimatedMinutes) 分钟，实际专注 \(actual) 分钟，完成于 \(formatter.string(from: task.completedAt ?? Date()))）"
+            if language.current == .simplifiedChinese {
+                return "- [x] [\(task.displayDirection(in: language.current))] \(task.title)（预计 \(task.estimatedMinutes) 分钟，实际专注 \(actual) 分钟，完成于 \(formatter.string(from: task.completedAt ?? Date()))）"
+            }
+            return "- [x] [\(task.displayDirection(in: language.current))] \(task.title) (estimated \(task.estimatedMinutes) min, focused \(actual) min, completed \(formatter.string(from: task.completedAt ?? Date())))"
         }
-        let title = "# TaskDeck \(period.rawValue)报告｜\(intervalText)"
-        let summary = "完成 \(report.completedCount) 项｜实际专注 \(durationText(seconds: focusSeconds))｜连续 \(store.completionStreak()) 天｜覆盖 \(report.directionCount) 个方向"
-        let body = ([title, "", summary, ""] + (lines.isEmpty ? ["本周期暂无完成记录。"] : lines)).joined(separator: "\n")
+        let title = "# TaskDeck \(period.reportTitle(in: language.current)) | \(intervalText)"
+        let summary = language.current == .simplifiedChinese
+            ? "完成 \(report.completedCount) 项｜实际专注 \(durationText(seconds: focusSeconds))｜连续 \(store.completionStreak()) 天｜覆盖 \(report.directionCount) 个方向"
+            : "\(report.completedCount) completed | \(durationText(seconds: focusSeconds)) focused | \(store.completionStreak())-day streak | \(report.directionCount) directions"
+        let empty = language.text("本周期暂无完成记录。", "No completed tasks in this period.")
+        let body = ([title, "", summary, ""] + (lines.isEmpty ? [empty] : lines)).joined(separator: "\n")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(body, forType: .string)
         copied = true
@@ -185,18 +196,20 @@ struct ReportPanel: View {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
-        panel.nameFieldStringValue = "TaskDeck-\(period.rawValue)报告-\(Date.now.formatted(.dateTime.year().month(.twoDigits).day(.twoDigits))).pdf"
+        let reportFileLabel = language.current == .simplifiedChinese ? "\(period.title(in: language.current))报告" : "\(period.title(in: language.current))-Report"
+        panel.nameFieldStringValue = "TaskDeck-\(reportFileLabel)-\(Date.now.formatted(.dateTime.year().month(.twoDigits).day(.twoDigits))).pdf"
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         do {
             try PDFReportExporter.write(
                 PDFReportPayload(
-                    periodTitle: "\(period.rawValue)度行动报告",
+                    periodTitle: period.reportTitle(in: language.current),
                     interval: report.interval,
                     completedTasks: report.completed,
                     focusSessions: focusSessions,
                     streak: store.completionStreak(),
-                    generatedAt: Date()
+                    generatedAt: Date(),
+                    language: language.current
                 ),
                 to: url
             )
@@ -236,6 +249,7 @@ private struct MetricCard: View {
 private struct ActivityHeatmap: View {
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var focus: FocusStore
+    @EnvironmentObject private var language: LanguageStore
 
     private let weeks = 12
     private let calendar = Calendar.current
@@ -243,17 +257,17 @@ private struct ActivityHeatmap: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("近 12 周活跃度")
+                Text(language.text("近 12 周活跃度", "Activity · Last 12 Weeks"))
                     .font(.system(size: 10, weight: .black))
                 Spacer()
-                Text("少")
+                Text(language.text("少", "Less"))
                     .foregroundStyle(DeckTheme.muted)
                 ForEach(0..<4, id: \.self) { level in
                     RoundedRectangle(cornerRadius: 2)
                         .fill(color(level: level))
                         .frame(width: 8, height: 8)
                 }
-                Text("多")
+                Text(language.text("多", "More"))
                     .foregroundStyle(DeckTheme.muted)
             }
             .font(.system(size: 7, weight: .bold))
@@ -303,11 +317,14 @@ private struct ActivityHeatmap: View {
     private func helpText(for date: Date) -> String {
         let completed = store.completionCount(on: date)
         let minutes = focus.seconds(on: date) / 60
-        return "\(date.formatted(.dateTime.year().month().day()))：完成 \(completed) 项，专注 \(minutes) 分钟"
+        return language.current == .simplifiedChinese
+            ? "\(date.formatted(.dateTime.year().month().day()))：完成 \(completed) 项，专注 \(minutes) 分钟"
+            : "\(date.formatted(.dateTime.year().month().day())): \(completed) completed, \(minutes) focus minutes"
     }
 }
 
 private struct DirectionDistribution: View {
+    @EnvironmentObject private var language: LanguageStore
     let tasks: [TaskItem]
 
     private var rows: [(String, Int)] {
@@ -320,11 +337,11 @@ private struct DirectionDistribution: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("方向完成分布")
+            Text(language.text("方向完成分布", "Completion by Direction"))
                 .font(.system(size: 10, weight: .black))
 
             if rows.isEmpty {
-                Text("完成任务后自动生成")
+                Text(language.text("完成任务后自动生成", "Generated after you complete tasks"))
                     .font(.system(size: 8))
                     .foregroundStyle(DeckTheme.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -332,7 +349,7 @@ private struct DirectionDistribution: View {
                 ForEach(rows, id: \.0) { row in
                     VStack(alignment: .leading, spacing: 5) {
                         HStack {
-                            Text(row.0).lineLimit(1)
+                            Text(row.0 == "未分类" ? language.text("未分类", "Uncategorized") : row.0).lineLimit(1)
                             Spacer()
                             Text("\(row.1)")
                         }
@@ -384,6 +401,7 @@ private struct FocusLogRow: View {
 }
 
 private struct CompletedLogRow: View {
+    @EnvironmentObject private var language: LanguageStore
     let task: TaskItem
     let actualSeconds: Int
 
@@ -398,7 +416,7 @@ private struct CompletedLogRow: View {
                     .font(.system(size: 9, weight: .semibold))
                     .lineLimit(2)
                 HStack {
-                    Text(task.normalizedDirection.uppercased())
+                    Text(task.displayDirection(in: language.current).uppercased())
                     if actualSeconds > 0 { Text("FOCUS \(max(1, actualSeconds / 60))M") }
                     Spacer()
                     Text(task.completedAt?.formatted(date: .omitted, time: .shortened) ?? "")

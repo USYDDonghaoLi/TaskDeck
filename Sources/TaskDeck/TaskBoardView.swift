@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TaskBoardView: View {
     @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var language: LanguageStore
     let filter: TaskFilter
     let direction: String?
     let onEdit: (TaskItem) -> Void
@@ -27,7 +28,7 @@ struct TaskBoardView: View {
                     ForEach(groupedTasks, id: \.0) { group in
                         VStack(alignment: .leading, spacing: 10) {
                             HStack {
-                                Text("// \(group.0.uppercased())")
+                                Text("// \((group.0 == "未分类" ? language.text("未分类", "Uncategorized") : group.0).uppercased())")
                                     .font(.system(size: 9, weight: .black))
                                     .foregroundStyle(DeckTheme.cyan)
                                     .tracking(1.2)
@@ -54,6 +55,7 @@ struct TaskBoardView: View {
 
 private struct TodayPulse: View {
     @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var language: LanguageStore
 
     var body: some View {
         HStack(spacing: 18) {
@@ -65,9 +67,13 @@ private struct TodayPulse: View {
                     .font(.system(size: 8, weight: .black))
                     .foregroundStyle(DeckTheme.muted)
                     .tracking(1.5)
-                Text(store.todayTotalCount == 0 ? "等待任务注入" : "已清除 \(store.todayCompleted.count) / \(store.todayTotalCount) 个节点")
+                Text(store.todayTotalCount == 0
+                    ? language.text("等待任务注入", "Waiting for a task")
+                    : language.format("已清除 %d / %d 个节点", "%d / %d nodes cleared", store.todayCompleted.count, store.todayTotalCount))
                     .font(.system(size: 13, weight: .bold))
-                Text(store.todayTotalCount == 0 ? "添加一个可执行、可计时的精准任务" : statusLine)
+                Text(store.todayTotalCount == 0
+                    ? language.text("添加一个可执行、可计时的精准任务", "Add a precise, actionable task with a timer")
+                    : statusLine)
                     .font(.system(size: 9))
                     .foregroundStyle(DeckTheme.muted)
             }
@@ -89,10 +95,10 @@ private struct TodayPulse: View {
 
     private var statusLine: String {
         switch store.todayProgress {
-        case 0..<0.34: return "系统已就绪，先拿下最小的一件事"
-        case 0..<0.75: return "节奏建立中，保持当前推进速度"
-        case 0..<1: return "即将清空今日任务队列"
-        default: return "今日任务队列已全部清空"
+        case 0..<0.34: return language.text("系统已就绪，先拿下最小的一件事", "System ready. Start with the smallest action.")
+        case 0..<0.75: return language.text("节奏建立中，保持当前推进速度", "Momentum established. Keep the current pace.")
+        case 0..<1: return language.text("即将清空今日任务队列", "The queue is almost clear.")
+        default: return language.text("今日任务队列已全部清空", "Today's queue is fully cleared.")
         }
     }
 }
@@ -123,6 +129,7 @@ private struct TaskCard: View {
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var notifications: NotificationManager
     @EnvironmentObject private var focus: FocusStore
+    @EnvironmentObject private var language: LanguageStore
     let task: TaskItem
     let onEdit: (TaskItem) -> Void
 
@@ -144,7 +151,9 @@ private struct TaskCard: View {
                 }
             }
             .buttonStyle(.plain)
-            .help(task.isCompleted ? "恢复为未完成" : "标记完成")
+            .help(task.isCompleted
+                ? language.text("恢复为未完成", "Restore as incomplete")
+                : language.text("标记完成", "Mark as completed"))
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(task.title)
@@ -162,7 +171,7 @@ private struct TaskCard: View {
 
                 HStack(spacing: 12) {
                     if task.priority != .normal {
-                        Label(task.priority.title, systemImage: task.priority.symbol)
+                        Label(task.priority.title(in: language.current), systemImage: task.priority.symbol)
                             .foregroundStyle(priorityColor)
                     }
                     Label(durationText, systemImage: "timer")
@@ -175,7 +184,7 @@ private struct TaskCard: View {
                             .foregroundStyle(isOverdue(dueAt) && !task.isCompleted ? DeckTheme.warning : DeckTheme.muted)
                     }
                     if task.recurrence != .none {
-                        Label(task.recurrence.title, systemImage: "repeat")
+                        Label(task.recurrence.title(in: language.current), systemImage: "repeat")
                     }
                 }
                 .font(.system(size: 8, weight: .bold))
@@ -197,25 +206,27 @@ private struct TaskCard: View {
             .buttonStyle(.plain)
             .disabled(task.isCompleted || (focus.active != nil && !isFocused))
             .opacity(task.isCompleted || (focus.active != nil && !isFocused) ? 0.35 : 1)
-            .help(isFocused ? (focus.active?.isPaused == true ? "继续专注" : "暂停专注") : "开始专注")
+            .help(focusActionTitle)
 
             Menu {
-                Button("编辑任务") { onEdit(task) }
-                Button(task.isCompleted ? "恢复任务" : "标记完成", action: toggle)
+                Button(language.text("编辑任务", "Edit Task")) { onEdit(task) }
+                Button(task.isCompleted
+                    ? language.text("恢复任务", "Restore Task")
+                    : language.text("标记完成", "Mark Completed"), action: toggle)
                 if !task.isCompleted && (focus.active == nil || isFocused) {
-                    Button(isFocused ? (focus.active?.isPaused == true ? "继续专注" : "暂停专注") : "开始专注") {
+                    Button(focusActionTitle) {
                         _ = focus.beginOrToggle(task)
                     }
                 }
                 if !task.isCompleted {
-                    Menu("推迟任务") {
-                        Button("一小时后") { reschedule(to: Date().addingTimeInterval(3_600)) }
-                        Button("明天 09:00") { reschedule(to: tomorrowMorning) }
-                        Button("下周一 09:00") { reschedule(to: nextMondayMorning) }
+                    Menu(language.text("推迟任务", "Postpone Task")) {
+                        Button(language.text("一小时后", "In One Hour")) { reschedule(to: Date().addingTimeInterval(3_600)) }
+                        Button(language.text("明天 09:00", "Tomorrow 09:00")) { reschedule(to: tomorrowMorning) }
+                        Button(language.text("下周一 09:00", "Next Monday 09:00")) { reschedule(to: nextMondayMorning) }
                     }
                 }
                 Divider()
-                Button("删除任务", role: .destructive) {
+                Button(language.text("删除任务", "Delete Task"), role: .destructive) {
                     notifications.cancel(for: task)
                     withAnimation(.easeOut(duration: 0.18)) { store.delete(task) }
                 }
@@ -254,7 +265,7 @@ private struct TaskCard: View {
 
     private var actualFocusText: String {
         let minutes = max(1, Int(round(Double(focus.seconds(for: task.id)) / 60)))
-        return "实投 \(minutes)M"
+        return language.format("实投 %dM", "FOCUS %dM", minutes)
     }
 
     private var isFocused: Bool { focus.active?.taskID == task.id }
@@ -264,9 +275,16 @@ private struct TaskCard: View {
         return focus.active?.isPaused == true ? "play.fill" : "pause.fill"
     }
 
+    private var focusActionTitle: String {
+        guard isFocused else { return language.text("开始专注", "Start Focus") }
+        return focus.active?.isPaused == true
+            ? language.text("继续专注", "Resume Focus")
+            : language.text("暂停专注", "Pause Focus")
+    }
+
     private func dueText(_ date: Date) -> String {
         if Calendar.current.isDateInToday(date) {
-            return "今天 \(date.formatted(date: .omitted, time: .shortened))"
+            return "\(language.text("今天", "Today")) \(date.formatted(date: .omitted, time: .shortened))"
         }
         return date.formatted(.dateTime.month(.twoDigits).day(.twoDigits).hour().minute())
     }
@@ -318,6 +336,7 @@ private struct TaskCard: View {
 }
 
 private struct EmptyTasksView: View {
+    @EnvironmentObject private var language: LanguageStore
     let filter: TaskFilter
 
     var body: some View {
@@ -333,9 +352,13 @@ private struct EmptyTasksView: View {
                     .font(.system(size: 20, weight: .light))
                     .foregroundStyle(DeckTheme.cyan)
             }
-            Text(filter == .completed ? "还没有完成记录" : "任务队列为空")
+            Text(filter == .completed
+                ? language.text("还没有完成记录", "No completed tasks yet")
+                : language.text("任务队列为空", "Task queue is empty"))
                 .font(.system(size: 12, weight: .bold))
-            Text(filter == .completed ? "完成任务后，战绩会出现在这里" : "现在很安静。也许正适合开始一件重要的事。")
+            Text(filter == .completed
+                ? language.text("完成任务后，战绩会出现在这里", "Your completed work will appear here.")
+                : language.text("现在很安静。也许正适合开始一件重要的事。", "It is quiet here—perhaps a good time to begin something important."))
                 .font(.system(size: 9))
                 .foregroundStyle(DeckTheme.muted)
         }

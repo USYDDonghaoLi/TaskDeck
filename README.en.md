@@ -17,6 +17,7 @@ TaskDeck is a local-first, hacker-inspired native macOS app for task execution a
 - Copy a Markdown report or export a polished one-page PDF report
 - Use a compact always-on-top task board across macOS Spaces
 - Keep all data locally with automatic backups and no cloud account
+- Switch instantly between Simplified Chinese and English, with the preference remembered locally
 
 ## Privacy and Data
 
@@ -66,6 +67,6 @@ outputs/            User guides, release notes, and sample reports
 
 ## Version
 
-Current stable version: TaskDeck 1.2.0.
+Current stable version: TaskDeck 1.3.0.
 
 This is a personal vibe-coding project. The repository is private by default; it can be made public later after reviewing signing, privacy, and release configuration.

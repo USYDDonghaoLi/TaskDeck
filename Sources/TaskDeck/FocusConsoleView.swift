@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FocusConsoleView: View {
     @EnvironmentObject private var focus: FocusStore
+    @EnvironmentObject private var language: LanguageStore
 
     var body: some View {
         if let active = focus.active {
@@ -23,11 +24,13 @@ struct FocusConsoleView: View {
 
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 7) {
-                                Text(active.isPaused ? "FOCUS PAUSED" : "FOCUS CHANNEL ACTIVE")
+                                Text(active.isPaused
+                                    ? language.text("专注已暂停", "FOCUS PAUSED")
+                                    : language.text("专注频道运行中", "FOCUS CHANNEL ACTIVE"))
                                     .font(.system(size: 7, weight: .black))
                                     .foregroundStyle(active.isPaused ? DeckTheme.lime : DeckTheme.cyan)
                                     .tracking(1.1)
-                                Text("// \(active.direction.uppercased())")
+                                Text("// \((active.direction == "未分类" ? language.text("未分类", "Uncategorized") : active.direction).uppercased())")
                                     .font(.system(size: 7, weight: .bold))
                                     .foregroundStyle(DeckTheme.muted)
                             }
@@ -43,12 +46,12 @@ struct FocusConsoleView: View {
                                 .font(.system(size: 18, weight: .black))
                                 .foregroundStyle(DeckTheme.text)
                                 .monospacedDigit()
-                            Text("TARGET \(active.estimatedMinutes) MIN")
+                            Text(language.format("目标 %d 分钟", "TARGET %d MIN", active.estimatedMinutes))
                                 .font(.system(size: 7, weight: .bold))
                                 .foregroundStyle(DeckTheme.muted)
                         }
 
-                        Button("结束专注") { _ = focus.finish() }
+                        Button(language.text("结束专注", "Finish Focus")) { _ = focus.finish() }
                             .buttonStyle(.plain)
                             .font(.system(size: 8, weight: .black))
                             .foregroundStyle(DeckTheme.text)
@@ -58,7 +61,7 @@ struct FocusConsoleView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 7))
 
                         Menu {
-                            Button("放弃本次记录", role: .destructive) { focus.discardActive() }
+                            Button(language.text("放弃本次记录", "Discard This Session"), role: .destructive) { focus.discardActive() }
                         } label: {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 10, weight: .bold))

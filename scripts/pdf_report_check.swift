@@ -3,10 +3,14 @@ import Foundation
 @main
 struct PDFReportCheck {
     static func main() throws {
-        guard CommandLine.arguments.count == 2 else {
-            fputs("Usage: pdf_report_check OUTPUT.pdf\n", stderr)
+        guard (2...3).contains(CommandLine.arguments.count) else {
+            fputs("Usage: pdf_report_check OUTPUT.pdf [en]\n", stderr)
             exit(2)
         }
+
+        let language: AppLanguage = CommandLine.arguments.count == 3 && CommandLine.arguments[2] == "en"
+            ? .english
+            : .simplifiedChinese
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Australia/Sydney")!
@@ -45,12 +49,13 @@ struct PDFReportCheck {
 
         let interval = DateInterval(start: date(1, hour: 0), end: calendar.date(from: DateComponents(year: 2026, month: 9, day: 1))!)
         let payload = PDFReportPayload(
-            periodTitle: "月度行动报告",
+            periodTitle: ReportPeriod.month.reportTitle(in: language),
             interval: interval,
             completedTasks: tasks.reversed(),
             focusSessions: sessions,
             streak: 7,
-            generatedAt: date(31, hour: 20)
+            generatedAt: date(31, hour: 20),
+            language: language
         )
 
         try PDFReportExporter.write(payload, to: URL(fileURLWithPath: CommandLine.arguments[1]))

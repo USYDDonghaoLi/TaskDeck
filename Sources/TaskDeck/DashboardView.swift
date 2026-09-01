@@ -4,6 +4,7 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var notifications: NotificationManager
+    @EnvironmentObject private var language: LanguageStore
     @Environment(\.openWindow) private var openWindow
 
     @State private var filter: TaskFilter = .today
@@ -66,7 +67,7 @@ struct DashboardView: View {
         .fontDesign(.monospaced)
         .overlay(alignment: .bottom) {
             if let error = store.persistenceError {
-                Label(error, systemImage: "externaldrive.badge.exclamationmark")
+                Label(localizedPersistenceError(error), systemImage: "externaldrive.badge.exclamationmark")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(DeckTheme.warning)
                     .padding(.horizontal, 14)
@@ -80,6 +81,7 @@ struct DashboardView: View {
             TaskComposerView(editingTask: editingTask)
                 .environmentObject(store)
                 .environmentObject(notifications)
+                .environmentObject(language)
         }
         .background(
             WindowAccessor { window in
@@ -100,10 +102,22 @@ struct DashboardView: View {
         editingTask = task
         showingComposer = true
     }
+
+    private func localizedPersistenceError(_ error: String) -> String {
+        guard language.current == .english else { return error }
+        if error.contains("读取失败") {
+            return "Task data could not be loaded. The original file was preserved and will not be overwritten."
+        }
+        if error.contains("保存失败") {
+            return "Task data could not be saved. Keep the app open and check disk permissions."
+        }
+        return error
+    }
 }
 
 private struct SidebarView: View {
     @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var language: LanguageStore
     @Binding var filter: TaskFilter
     @Binding var selectedDirection: String?
     let onAdd: () -> Void
@@ -137,7 +151,7 @@ private struct SidebarView: View {
             Button(action: onAdd) {
                 HStack {
                     Image(systemName: "plus")
-                    Text("新建精准任务")
+                    Text(language.text("新建精准任务", "New Precise Task"))
                     Spacer()
                     Text("⌘N")
                         .foregroundStyle(DeckTheme.void.opacity(0.6))
@@ -154,13 +168,13 @@ private struct SidebarView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 20)
 
-            Text("任务流")
+            Text(language.text("任务流", "Task Flow"))
                 .sidebarLabel()
 
             VStack(spacing: 4) {
                 ForEach(TaskFilter.allCases) { item in
                     SidebarRow(
-                        title: item.rawValue,
+                        title: item.title(in: language.current),
                         symbol: item.symbol,
                         count: count(for: item),
                         isSelected: filter == item && selectedDirection == nil
@@ -172,7 +186,7 @@ private struct SidebarView: View {
             }
             .padding(.horizontal, 10)
 
-            Text("作战方向")
+            Text(language.text("作战方向", "Directions"))
                 .sidebarLabel()
                 .padding(.top, 22)
 
@@ -261,6 +275,7 @@ private struct SidebarRow: View {
 }
 
 private struct CommandHeader: View {
+    @EnvironmentObject private var language: LanguageStore
     let filter: TaskFilter
     let selectedDirection: String?
     let onAdd: () -> Void
@@ -269,24 +284,44 @@ private struct CommandHeader: View {
     var body: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(selectedDirection ?? filter.rawValue)
+                Text(selectedDirection ?? filter.title(in: language.current))
                     .font(.system(size: 18, weight: .black))
-                Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day().locale(Locale(identifier: "zh_CN"))))
+                Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day().locale(language.current.locale)))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(DeckTheme.muted)
             }
 
             Spacer()
 
+            Menu {
+                ForEach(AppLanguage.allCases) { item in
+                    Button {
+                        language.current = item
+                    } label: {
+                        if language.current == item {
+                            Label(item.label, systemImage: "checkmark")
+                        } else {
+                            Text(item.label)
+                        }
+                    }
+                }
+            } label: {
+                Label(language.current.shortLabel, systemImage: "globe")
+                    .headerButton()
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help(language.text("切换界面语言", "Switch interface language"))
+
             Button(action: showDesktop) {
-                Label("桌面悬浮", systemImage: "rectangle.on.rectangle")
+                Label(language.text("桌面悬浮", "Desktop Board"), systemImage: "rectangle.on.rectangle")
                     .headerButton()
             }
             .buttonStyle(.plain)
-            .help("打开一个可置顶的紧凑任务板")
+            .help(language.text("打开一个可置顶的紧凑任务板", "Open the compact always-on-top task board"))
 
             Button(action: onAdd) {
-                Label("添加任务", systemImage: "plus")
+                Label(language.text("添加任务", "Add Task"), systemImage: "plus")
                     .headerButton(accented: true)
             }
             .buttonStyle(.plain)

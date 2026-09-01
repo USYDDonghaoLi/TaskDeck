@@ -21,8 +21,11 @@ final class NotificationManager: ObservableObject {
     func schedule(for task: TaskItem) {
         guard task.reminderEnabled, let date = task.dueAt, date > Date() else { return }
 
+        let language = UserDefaults.standard.string(forKey: LanguageStore.defaultsKey)
+            .flatMap(AppLanguage.init(rawValue:)) ?? .simplifiedChinese
+
         let content = UNMutableNotificationContent()
-        content.title = "TASKDECK // \(task.normalizedDirection.uppercased())"
+        content.title = "TASKDECK // \(task.displayDirection(in: language).uppercased())"
         content.body = task.title
         content.sound = .default
 

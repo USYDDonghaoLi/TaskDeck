@@ -9,6 +9,7 @@ struct LogicCheck {
         try checkTaskLifecycle()
         try checkFocusLifecycle()
         try checkCompletionStreak()
+        checkLanguagePreference()
         print("TaskDeck logic checks passed")
     }
 
@@ -205,5 +206,25 @@ struct LogicCheck {
 
         let store = TaskStore(fileURL: fileURL)
         precondition(store.completionStreak() == 3)
+    }
+
+    @MainActor
+    private static func checkLanguagePreference() {
+        let suiteName = "TaskDeckLanguageCheck-\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            preconditionFailure("Could not create isolated user defaults")
+        }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let language = LanguageStore(defaults: defaults)
+        precondition(language.current == .simplifiedChinese)
+        precondition(TaskFilter.today.title(in: language.current) == "今日任务")
+
+        language.current = .english
+        precondition(defaults.string(forKey: LanguageStore.defaultsKey) == AppLanguage.english.rawValue)
+        precondition(TaskFilter.today.title(in: language.current) == "Today")
+        precondition(TaskPriority.urgent.title(in: language.current) == "Urgent")
+        precondition(TaskRecurrence.weekdays.title(in: language.current) == "Weekdays")
+        precondition(ReportPeriod.month.reportTitle(in: language.current) == "Monthly Action Report")
     }
 }
