@@ -5,6 +5,7 @@ import WidgetKit
 final class TaskStore: ObservableObject {
     @Published private(set) var tasks: [TaskItem] = []
     @Published private(set) var persistenceError: String?
+    @Published private(set) var lastDeletedTask: TaskItem?
 
     let databaseURL: URL
     private let calendar: Calendar
@@ -40,12 +41,18 @@ final class TaskStore: ObservableObject {
         }
     }
 
+    var activeTasks: [TaskItem] { tasks.filter { !$0.isDeleted } }
+
+    var trashedTasks: [TaskItem] {
+        tasks.filter(\.isDeleted).sorted { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
+    }
+
     var directions: [String] {
-        Array(Set(tasks.map(\.normalizedDirection))).sorted { $0.localizedCompare($1) == .orderedAscending }
+        Array(Set(activeTasks.map(\.normalizedDirection))).sorted { $0.localizedCompare($1) == .orderedAscending }
     }
 
     var pendingTasks: [TaskItem] {
-        tasks.filter { !$0.isCompleted }.sorted(by: Self.taskSort)
+        activeTasks.filter { !$0.isCompleted }.sorted(by: Self.taskSort)
     }
 
     var todayPending: [TaskItem] {
@@ -56,7 +63,7 @@ final class TaskStore: ObservableObject {
     }
 
     var todayCompleted: [TaskItem] {
-        tasks.filter { task in
+        activeTasks.filter { task in
             guard let completedAt = task.completedAt else { return false }
             return calendar.isDateInToday(completedAt)
         }.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
@@ -73,7 +80,7 @@ final class TaskStore: ObservableObject {
         let base: [TaskItem]
         switch filter {
         case .today:
-            base = tasks.filter { task in
+            base = activeTasks.filter { task in
                 if let completedAt = task.completedAt {
                     return calendar.isDateInToday(completedAt)
                 }
@@ -81,9 +88,9 @@ final class TaskStore: ObservableObject {
                 return calendar.isDateInToday(dueAt) || dueAt < calendar.startOfDay(for: Date())
             }
         case .inbox:
-            base = tasks.filter { !$0.isCompleted }
+            base = activeTasks.filter { !$0.isCompleted }
         case .completed:
-            base = tasks.filter(\.isCompleted)
+            base = activeTasks.filter(\.isCompleted)
         }
 
         return base
@@ -128,7 +135,7 @@ final class TaskStore: ObservableObject {
         normalized.reminderEnabled = task.reminderEnabled && task.dueAt != nil
         normalized.recurrence = task.dueAt == nil ? .none : task.recurrence
         let changed = mutateTasks(reason: "task-edit") { persistedTasks in
-            guard let index = persistedTasks.firstIndex(where: { $0.id == normalized.id }) else {
+            guard let index = persistedTasks.firstIndex(where: { $0.id == normalized.id && !$0.isDeleted }) else {
                 return false
             }
             persistedTasks[index] = normalized
@@ -141,7 +148,7 @@ final class TaskStore: ObservableObject {
     func toggle(_ task: TaskItem) -> TaskItem? {
         var generatedTask: TaskItem?
         _ = mutateTasks(reason: "task-toggle") { persistedTasks in
-            guard let index = persistedTasks.firstIndex(where: { $0.id == task.id }) else {
+            guard let index = persistedTasks.firstIndex(where: { $0.id == task.id && !$0.isDeleted }) else {
                 return false
             }
 
@@ -177,7 +184,7 @@ final class TaskStore: ObservableObject {
     func reschedule(_ task: TaskItem, to date: Date) -> TaskItem? {
         var updatedTask: TaskItem?
         _ = mutateTasks(reason: "task-reschedule") { persistedTasks in
-            guard let index = persistedTasks.firstIndex(where: { $0.id == task.id }) else {
+            guard let index = persistedTasks.firstIndex(where: { $0.id == task.id && !$0.isDeleted }) else {
                 return false
             }
             persistedTasks[index].dueAt = date
@@ -189,21 +196,64 @@ final class TaskStore: ObservableObject {
 
     func delete(_ task: TaskItem) {
         _ = mutateTasks(reason: "task-delete") { persistedTasks in
-            guard persistedTasks.contains(where: { $0.id == task.id }) else { return false }
-            persistedTasks.removeAll { $0.id == task.id }
+            guard let index = persistedTasks.firstIndex(where: { $0.id == task.id && !$0.isDeleted }) else {
+                return false
+            }
+            persistedTasks[index].deletedAt = Date()
+            lastDeletedTask = persistedTasks[index]
+            return true
+        }
+    }
+
+    @discardableResult
+    func undoLastDelete() -> TaskItem? {
+        guard let task = lastDeletedTask else { return nil }
+        let restored = restore(task)
+        if restored != nil { lastDeletedTask = nil }
+        return restored
+    }
+
+    @discardableResult
+    func restore(_ task: TaskItem) -> TaskItem? {
+        var restored: TaskItem?
+        _ = mutateTasks(reason: "task-restore") { persistedTasks in
+            guard let index = persistedTasks.firstIndex(where: { $0.id == task.id && $0.isDeleted }) else {
+                return false
+            }
+            persistedTasks[index].deletedAt = nil
+            restored = persistedTasks[index]
+            return true
+        }
+        return restored
+    }
+
+    func permanentlyDelete(_ task: TaskItem) {
+        _ = mutateTasks(reason: "task-delete-permanently") { persistedTasks in
+            guard persistedTasks.contains(where: { $0.id == task.id && $0.isDeleted }) else { return false }
+            persistedTasks.removeAll { $0.id == task.id && $0.isDeleted }
+            if lastDeletedTask?.id == task.id { lastDeletedTask = nil }
+            return true
+        }
+    }
+
+    func emptyTrash() {
+        _ = mutateTasks(reason: "trash-empty") { persistedTasks in
+            guard persistedTasks.contains(where: \.isDeleted) else { return false }
+            persistedTasks.removeAll(where: \.isDeleted)
+            lastDeletedTask = nil
             return true
         }
     }
 
     func report(for period: ReportPeriod, reference: Date = Date()) -> ReportSnapshot {
         let interval = Self.interval(for: period, reference: reference, calendar: calendar)
-        let completed = tasks
+        let completed = activeTasks
             .filter { task in
                 guard let date = task.completedAt else { return false }
                 return interval.contains(date)
             }
             .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
-        let created = tasks.filter { interval.contains($0.createdAt) }
+        let created = activeTasks.filter { interval.contains($0.createdAt) }
         let directionCount = Set(completed.map(\.normalizedDirection)).count
         return ReportSnapshot(
             interval: interval,
@@ -218,14 +268,14 @@ final class TaskStore: ObservableObject {
     }
 
     func completionCount(on date: Date) -> Int {
-        tasks.reduce(0) { count, task in
+        activeTasks.reduce(0) { count, task in
             guard let completedAt = task.completedAt, calendar.isDate(completedAt, inSameDayAs: date) else { return count }
             return count + 1
         }
     }
 
     func completionStreak(reference: Date = Date()) -> Int {
-        let completedDays = Set(tasks.compactMap { task in
+        let completedDays = Set(activeTasks.compactMap { task in
             task.completedAt.map { calendar.startOfDay(for: $0) }
         })
         guard !completedDays.isEmpty else { return 0 }
@@ -262,6 +312,24 @@ final class TaskStore: ObservableObject {
             focusSessions: focusStore.sessions,
             activeFocus: focusStore.active
         ))
+    }
+
+    func listBackups() throws -> [DatabaseBackupInfo] {
+        guard let database else {
+            throw TaskDatabaseError(operation: "List backups", message: "Database is unavailable")
+        }
+        return try database.listBackups()
+    }
+
+    func restoreBackup(_ backup: DatabaseBackupInfo, focusStore: FocusStore) throws {
+        guard backup.isValid, let database else {
+            throw TaskDatabaseError(operation: "Restore backup", message: "The backup is unavailable or invalid")
+        }
+        try database.restoreBackup(at: backup.url)
+        lastDeletedTask = nil
+        refreshFromDisk()
+        focusStore.refreshFromDatabase()
+        WidgetCenter.shared.reloadTimelines(ofKind: TaskDeckShared.widgetKind)
     }
 
     func importArchive(_ data: Data, focusStore: FocusStore) throws {

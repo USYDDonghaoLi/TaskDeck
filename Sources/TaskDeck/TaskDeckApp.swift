@@ -34,6 +34,7 @@ struct TaskDeckApp: App {
         Settings {
             SettingsView()
                 .environmentObject(store)
+                .environmentObject(notifications)
                 .environmentObject(focus)
                 .environmentObject(language)
                 .environment(\.locale, language.current.locale)

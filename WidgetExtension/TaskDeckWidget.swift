@@ -44,7 +44,7 @@ struct TaskDeckTimelineProvider: TimelineProvider {
     private func entry() -> TaskDeckWidgetEntry {
         TaskDeckWidgetEntry(
             date: Date(),
-            tasks: (try? TaskDeckShared.loadTasks()) ?? [],
+            tasks: ((try? TaskDeckShared.loadTasks()) ?? []).filter { !$0.isDeleted },
             language: TaskDeckShared.storedLanguage()
         )
     }

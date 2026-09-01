@@ -75,6 +75,7 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     let createdAt: Date
     var completedAt: Date?
     var generatedNextTaskID: UUID?
+    var deletedAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -88,7 +89,8 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         recurrence: TaskRecurrence = .none,
         createdAt: Date = Date(),
         completedAt: Date? = nil,
-        generatedNextTaskID: UUID? = nil
+        generatedNextTaskID: UUID? = nil,
+        deletedAt: Date? = nil
     ) {
         self.id = id
         self.direction = direction.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -102,9 +104,11 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.createdAt = createdAt
         self.completedAt = completedAt
         self.generatedNextTaskID = generatedNextTaskID
+        self.deletedAt = deletedAt
     }
 
     var isCompleted: Bool { completedAt != nil }
+    var isDeleted: Bool { deletedAt != nil }
 
     var normalizedDirection: String {
         direction.isEmpty ? "未分类" : direction
@@ -127,6 +131,7 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         case createdAt
         case completedAt
         case generatedNextTaskID
+        case deletedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -148,6 +153,7 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
         generatedNextTaskID = try container.decodeIfPresent(UUID.self, forKey: .generatedNextTaskID)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
     }
 }
 

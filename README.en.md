@@ -20,6 +20,8 @@ TaskDeck is a local-first, hacker-inspired native macOS app for task execution a
 - Complete tasks directly in a widget with App Intents and deep-link to the matching task in the app
 - Share tasks, focus history, and the Widget through one local SQLite database
 - Create a backup before every change and retain the latest 30 recoverable databases
+- Move tasks to Trash first, with immediate undo, later restoration, and explicit permanent deletion
+- Browse automatic backups, check integrity, and safely restore task and focus data in Settings
 - Import or export a complete JSON archive from the Settings window
 - Switch between Simplified Chinese and English in Settings, with the preference remembered locally
 - Support Hardened Runtime, Universal binaries, Developer ID, Apple notarization, and a public DMG release pipeline
@@ -44,7 +46,7 @@ TaskDeck does not upload task content. Starting in 1.5, tasks, focus history, an
 
 Upgrading does not delete existing tasks. On the first 1.5 launch, TaskDeck imports the 1.4 shared `tasks.json` first, then the focus JSON files. It never moves, overwrites, or deletes those originals. JSON import also backs up the current database before replacing data.
 
-Version 1.6 also adds a read-only SQLite migration from the development App Group to a registered production App Group. Tasks, focus history, and an active timer are copied on first launch while the old database remains byte-for-byte untouched. See [PRIVACY.md](PRIVACY.md) for the complete privacy policy.
+Version 1.6 also adds a read-only SQLite migration from the development App Group to a registered production App Group. Tasks, focus history, and an active timer are copied on first launch while the old database remains byte-for-byte untouched. Version 1.7 moves deleted tasks to Trash and adds integrity-checked database restoration. Its migration only adds an optional column and does not delete existing tasks. See [PRIVACY.md](PRIVACY.md) for the complete privacy policy.
 
 ## Requirements
 
@@ -87,7 +89,7 @@ The public pipeline produces an arm64 + x86_64 Universal app, exports with Devel
 2. On first launch, if macOS displays a security confirmation, right-click the app and choose Open.
 3. Add a precise task and use its play button to start focusing.
 4. Use the pencil on a task card to change its name, estimated duration, or priority.
-5. Open Settings to change language, import/export JSON, or reveal the data folder.
+5. Open Settings to change language, manage Trash, browse/restore automatic backups, import/export JSON, or reveal the data folder.
 6. Review daily, weekly, or monthly results and export a PDF from the report panel.
 7. Open the desktop board for an always-on-top compact view.
 8. Right-click the desktop, choose Edit Widgets, search for TaskDeck, and pick a small, medium, or large widget.
@@ -105,6 +107,6 @@ outputs/            User guides, release notes, and sample reports
 
 ## Version
 
-Current version: TaskDeck 1.6.0 (Build 7).
+Current version: TaskDeck 1.7.0 (Build 8).
 
 This is a personal vibe-coding project. The repository is private by default; it can be made public later after reviewing signing, privacy, and release configuration.

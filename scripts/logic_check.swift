@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 @main
 struct LogicCheck {
@@ -10,6 +11,8 @@ struct LogicCheck {
         try checkSharedStorageMigration()
         try checkCorruptDatabaseProtection()
         try checkTaskLifecycleAndBackups()
+        try checkTrashUndoAndSafeRestore()
+        try checkVersionOneDatabaseMigration()
         try checkSharedWriteCoordination()
         try checkFocusLifecycle()
         try checkArchiveRoundTrip()
@@ -323,6 +326,97 @@ struct LogicCheck {
     }
 
     @MainActor
+    private static func checkTrashUndoAndSafeRestore() throws {
+        let root = temporaryRoot("TaskDeckTrashAndRestore")
+        let databaseURL = root.appendingPathComponent("TaskDeck/taskdeck.sqlite3")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = TaskStore(databaseURL: databaseURL)
+        let focus = FocusStore(databaseURL: databaseURL)
+        let first = store.add(direction: "安全删除", title: "保留任务 A", estimatedMinutes: 20, dueAt: nil, reminderEnabled: false)
+        store.delete(first)
+        precondition(store.activeTasks.isEmpty)
+        precondition(store.trashedTasks.map(\.id) == [first.id])
+        precondition(store.tasks(for: .inbox).isEmpty)
+        precondition(store.report(for: .day).createdCount == 0)
+        let couldToggleDeletedTask = try TaskDeckShared.toggleTask(id: first.id, at: databaseURL)
+        precondition(!couldToggleDeletedTask)
+
+        let reopened = TaskStore(databaseURL: databaseURL)
+        precondition(reopened.trashedTasks.first?.id == first.id)
+        precondition(reopened.undoLastDelete() == nil)
+        precondition(store.undoLastDelete()?.id == first.id)
+        precondition(store.activeTasks.first?.id == first.id)
+
+        _ = store.add(direction: "安全恢复", title: "保留任务 B", estimatedMinutes: 25, dueAt: nil, reminderEnabled: false)
+        let database = try TaskDatabase(url: databaseURL)
+        guard let oneTaskBackup = try database.listBackups().first(where: { $0.isValid && $0.taskCount == 1 }) else {
+            preconditionFailure("Expected an automatic backup containing one task")
+        }
+        _ = store.add(direction: "安全恢复", title: "稍后移除的任务 C", estimatedMinutes: 30, dueAt: nil, reminderEnabled: false)
+        precondition(store.activeTasks.count == 3)
+        try store.restoreBackup(oneTaskBackup, focusStore: focus)
+        precondition(store.activeTasks.count == 1)
+        precondition(store.activeTasks.first?.id == first.id)
+        let backupsAfterRestore = try database.listBackups()
+        precondition(backupsAfterRestore.contains(where: { $0.url.lastPathComponent.contains("before-restore") }))
+
+        let bytesBeforeInvalidRestore = try Data(contentsOf: databaseURL)
+        let corruptURL = database.backupDirectory.appendingPathComponent("TaskDeck-corrupt.sqlite3")
+        try Data("not a sqlite database".utf8).write(to: corruptURL, options: .atomic)
+        guard let corruptBackup = try database.listBackups().first(where: { $0.url.lastPathComponent == corruptURL.lastPathComponent }) else {
+            preconditionFailure("Expected corrupt backup to remain visible")
+        }
+        precondition(!corruptBackup.isValid)
+        do {
+            try database.restoreBackup(at: corruptURL)
+            preconditionFailure("A corrupt backup must not be restored")
+        } catch { }
+        let bytesAfterCorruptRestore = try Data(contentsOf: databaseURL)
+        precondition(bytesAfterCorruptRestore == bytesBeforeInvalidRestore)
+
+        let outsideURL = root.appendingPathComponent("outside.sqlite3")
+        try Data(contentsOf: databaseURL).write(to: outsideURL, options: .atomic)
+        do {
+            try database.restoreBackup(at: outsideURL)
+            preconditionFailure("A database outside the managed backup folder must not be restored")
+        } catch { }
+        let bytesAfterOutsideRestore = try Data(contentsOf: databaseURL)
+        precondition(bytesAfterOutsideRestore == bytesBeforeInvalidRestore)
+    }
+
+    private static func checkVersionOneDatabaseMigration() throws {
+        let root = temporaryRoot("TaskDeckVersionOneMigration")
+        let databaseURL = root.appendingPathComponent("TaskDeck/taskdeck.sqlite3")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: databaseURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let taskID = UUID()
+        try executeRawSQLite(at: databaseURL, sql: """
+        CREATE TABLE tasks (
+            id TEXT PRIMARY KEY NOT NULL, direction TEXT NOT NULL, title TEXT NOT NULL,
+            notes TEXT NOT NULL, estimated_minutes INTEGER NOT NULL, priority TEXT NOT NULL,
+            due_at REAL, reminder_enabled INTEGER NOT NULL, recurrence TEXT NOT NULL,
+            created_at REAL NOT NULL, completed_at REAL, generated_next_task_id TEXT
+        );
+        INSERT INTO tasks VALUES ('\(taskID.uuidString)', '迁移', '版本一任务', '', 25, 'normal', NULL, 0, 'none', 1788200000, NULL, NULL);
+        PRAGMA user_version = 1;
+        """)
+
+        let database = try TaskDatabase(url: databaseURL)
+        let tasks = try database.loadTasks()
+        precondition(tasks.count == 1)
+        precondition(tasks.first?.id == taskID)
+        precondition(tasks.first?.deletedAt == nil)
+        let schemaVersion = try scalarRawSQLite(at: databaseURL, sql: "PRAGMA user_version")
+        let deletedColumnCount = try scalarRawSQLite(
+            at: databaseURL,
+            sql: "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name = 'deleted_at'"
+        )
+        precondition(schemaVersion == 2)
+        precondition(deletedColumnCount == 1)
+    }
+
+    @MainActor
     private static func checkFocusLifecycle() throws {
         let root = temporaryRoot("TaskDeckFocusLifecycle")
         let databaseURL = root.appendingPathComponent("TaskDeck/taskdeck.sqlite3")
@@ -409,7 +503,7 @@ struct LogicCheck {
         guard case let .archive(decoded) = try TaskDeckArchiveCodec.decode(archiveData) else {
             preconditionFailure("Expected a complete TaskDeck archive")
         }
-        precondition(decoded.schemaVersion == 2)
+        precondition(decoded.schemaVersion == 3)
         precondition(decoded.tasks.count == 1)
         precondition(decoded.focusSessions.count == 1)
 
@@ -484,5 +578,33 @@ struct LogicCheck {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(tasks)
+    }
+
+    private static func executeRawSQLite(at url: URL, sql: String) throws {
+        var database: OpaquePointer?
+        guard sqlite3_open(url.path, &database) == SQLITE_OK, let database else {
+            throw NSError(domain: "TaskDeckLogicCheck", code: 1)
+        }
+        defer { sqlite3_close(database) }
+        guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else {
+            throw NSError(domain: "TaskDeckLogicCheck", code: 2)
+        }
+    }
+
+    private static func scalarRawSQLite(at url: URL, sql: String) throws -> Int {
+        var database: OpaquePointer?
+        guard sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let database else {
+            throw NSError(domain: "TaskDeckLogicCheck", code: 3)
+        }
+        defer { sqlite3_close(database) }
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            throw NSError(domain: "TaskDeckLogicCheck", code: 4)
+        }
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            throw NSError(domain: "TaskDeckLogicCheck", code: 5)
+        }
+        return Int(sqlite3_column_int(statement, 0))
     }
 }

@@ -102,7 +102,7 @@ enum TaskDeckShared {
     ) throws -> Bool {
         let database = try TaskDatabase(url: databaseURL ?? self.databaseURL())
         let changed = try database.mutateTasks(reason: "widget-toggle") { tasks in
-            guard let index = tasks.firstIndex(where: { $0.id == id }) else { return false }
+            guard let index = tasks.firstIndex(where: { $0.id == id && !$0.isDeleted }) else { return false }
 
             if tasks[index].completedAt == nil {
                 tasks[index].completedAt = now

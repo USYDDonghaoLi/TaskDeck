@@ -2,6 +2,15 @@
 
 All notable TaskDeck changes are recorded here. Version numbers follow semantic versioning, while `CFBundleVersion` uses a monotonically increasing integer.
 
+## 1.7.0 (Build 8) - Safety & Recovery
+
+- Added a task Trash with one-click undo, restore, permanent deletion, and empty-trash controls.
+- Added a database-backup browser with integrity status, task/focus counts, and bilingual restore confirmation.
+- Added guarded restore: only managed TaskDeck backups are accepted, corrupt files are rejected, and the current database is backed up again before replacement.
+- Migrated SQLite schema v1 to v2 with a non-destructive `deleted_at` column; existing tasks remain active and unchanged.
+- Excluded trashed tasks from lists, reports, streaks, heatmaps, deep links, and Widget interactions.
+- Added regression coverage for soft deletion, undo, SQLite v1 migration, safe restore, corrupt backups, and path validation.
+
 ## 1.6.0 (Build 7) - Public Release Preparation
 
 - Added configurable production bundle identifiers and App Group identifiers.

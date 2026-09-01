@@ -255,7 +255,7 @@ private struct TaskCard: View {
                     }
                 }
                 Divider()
-                Button(language.text("删除任务", "Delete Task"), role: .destructive) {
+                Button(language.text("移到回收站", "Move to Trash"), role: .destructive) {
                     notifications.cancel(for: task)
                     withAnimation(.easeOut(duration: 0.18)) { store.delete(task) }
                 }

@@ -10,3 +10,4 @@ outputs/releases/
 scripts/release.env
 scripts/privacy_denylist.txt
 *.xcarchive
+xcuserdata/

@@ -8,6 +8,18 @@ struct TaskDatabaseError: LocalizedError {
     var errorDescription: String? { "\(operation): \(message)" }
 }
 
+struct DatabaseBackupInfo: Identifiable, Equatable, Sendable {
+    let url: URL
+    let createdAt: Date
+    let size: Int64
+    let taskCount: Int?
+    let focusSessionCount: Int?
+    let validationError: String?
+
+    var id: URL { url }
+    var isValid: Bool { validationError == nil }
+}
+
 final class TaskDatabase {
     let url: URL
     let backupDirectory: URL
@@ -48,6 +60,7 @@ final class TaskDatabase {
         try withConnection { database in
             try configure(database)
             try createSchema(database)
+            try migrateSchema(database)
         }
     }
 
@@ -62,6 +75,67 @@ final class TaskDatabase {
         try withConnection { database in
             try configure(database)
             return try scalarInt(database, sql: "SELECT COUNT(*) FROM tasks")
+        }
+    }
+
+    func focusSessionCount() throws -> Int {
+        try withConnection { database in
+            try configure(database)
+            return try scalarInt(database, sql: "SELECT COUNT(*) FROM focus_sessions")
+        }
+    }
+
+    func listBackups() throws -> [DatabaseBackupInfo] {
+        guard fileManager.fileExists(atPath: backupDirectory.path) else { return [] }
+        let urls = try fileManager.contentsOfDirectory(
+            at: backupDirectory,
+            includingPropertiesForKeys: [.creationDateKey, .contentModificationDateKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        )
+        return urls
+            .filter { $0.pathExtension == "sqlite3" }
+            .map { backupInfo(for: $0) }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    func restoreBackup(at backupURL: URL) throws {
+        try requireWritable()
+        let candidate = backupURL.standardizedFileURL
+        let root = backupDirectory.standardizedFileURL
+        guard candidate.deletingLastPathComponent() == root,
+              candidate.pathExtension == "sqlite3",
+              fileManager.fileExists(atPath: candidate.path) else {
+            throw TaskDatabaseError(operation: "Restore backup", message: "The selected file is not a TaskDeck database backup")
+        }
+        try validateDatabase(at: candidate)
+
+        try withConnection { database in
+            try configure(database)
+            try createBackup(from: database, reason: "before-restore")
+        }
+
+        let temporaryURL = url.deletingLastPathComponent()
+            .appendingPathComponent("TaskDeck-restore-\(UUID().uuidString).sqlite3")
+        defer { try? fileManager.removeItem(at: temporaryURL) }
+        try copyDatabase(from: candidate, to: temporaryURL)
+
+        _ = try TaskDatabase(
+            url: temporaryURL,
+            backupDirectory: backupDirectory,
+            fileManager: fileManager
+        )
+        try validateDatabase(at: temporaryURL)
+
+        _ = try fileManager.replaceItemAt(
+            url,
+            withItemAt: temporaryURL,
+            backupItemName: nil,
+            options: [.usingNewMetadataOnly]
+        )
+        try withConnection { database in
+            try configure(database)
+            try createSchema(database)
+            try migrateSchema(database)
         }
     }
 
@@ -225,7 +299,8 @@ final class TaskDatabase {
             recurrence TEXT NOT NULL,
             created_at REAL NOT NULL,
             completed_at REAL,
-            generated_next_task_id TEXT
+            generated_next_task_id TEXT,
+            deleted_at REAL
         );
         CREATE INDEX IF NOT EXISTS tasks_due_at_idx ON tasks(due_at);
         CREATE INDEX IF NOT EXISTS tasks_completed_at_idx ON tasks(completed_at);
@@ -268,15 +343,25 @@ final class TaskDatabase {
             running_since REAL,
             accumulated_seconds REAL NOT NULL
         );
-        PRAGMA user_version = 1;
         """)
     }
 
+    private func migrateSchema(_ database: OpaquePointer) throws {
+        if !(try columnExists("deleted_at", in: "tasks", database: database)) {
+            try execute(database, sql: "ALTER TABLE tasks ADD COLUMN deleted_at REAL")
+        }
+        try execute(database, sql: "CREATE INDEX IF NOT EXISTS tasks_deleted_at_idx ON tasks(deleted_at)")
+        try execute(database, sql: "PRAGMA user_version = 2")
+    }
+
     private func readTasks(_ database: OpaquePointer) throws -> [TaskItem] {
+        let deletedColumn = (try columnExists("deleted_at", in: "tasks", database: database))
+            ? "deleted_at"
+            : "NULL AS deleted_at"
         let sql = """
         SELECT id, direction, title, notes, estimated_minutes, priority,
                due_at, reminder_enabled, recurrence, created_at,
-               completed_at, generated_next_task_id
+               completed_at, generated_next_task_id, \(deletedColumn)
         FROM tasks
         ORDER BY created_at ASC
         """
@@ -292,6 +377,7 @@ final class TaskDatabase {
             let dueAt = date(statement, 6)
             let completedAt = date(statement, 10)
             let generatedID = nullableText(statement, 11).flatMap(UUID.init(uuidString:))
+            let deletedAt = date(statement, 12)
             tasks.append(TaskItem(
                 id: id,
                 direction: text(statement, 1),
@@ -304,7 +390,8 @@ final class TaskDatabase {
                 recurrence: TaskRecurrence(rawValue: text(statement, 8)) ?? .none,
                 createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 9)),
                 completedAt: completedAt,
-                generatedNextTaskID: generatedID
+                generatedNextTaskID: generatedID,
+                deletedAt: deletedAt
             ))
             result = sqlite3_step(statement)
         }
@@ -336,8 +423,8 @@ final class TaskDatabase {
         INSERT INTO tasks (
             id, direction, title, notes, estimated_minutes, priority,
             due_at, reminder_enabled, recurrence, created_at,
-            completed_at, generated_next_task_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            completed_at, generated_next_task_id, deleted_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             direction = excluded.direction,
             title = excluded.title,
@@ -349,7 +436,8 @@ final class TaskDatabase {
             recurrence = excluded.recurrence,
             created_at = excluded.created_at,
             completed_at = excluded.completed_at,
-            generated_next_task_id = excluded.generated_next_task_id
+            generated_next_task_id = excluded.generated_next_task_id,
+            deleted_at = excluded.deleted_at
         """
         for task in tasks {
             let statement = try prepare(database, sql: sql)
@@ -366,8 +454,27 @@ final class TaskDatabase {
             sqlite3_bind_double(statement, 10, task.createdAt.timeIntervalSince1970)
             bind(task.completedAt, to: statement, at: 11)
             try bind(task.generatedNextTaskID?.uuidString, to: statement, at: 12, database: database)
+            bind(task.deletedAt, to: statement, at: 13)
             try stepDone(database, statement: statement)
         }
+    }
+
+    private func columnExists(
+        _ column: String,
+        in table: String,
+        database: OpaquePointer
+    ) throws -> Bool {
+        let statement = try prepare(database, sql: "PRAGMA table_info(\(table))")
+        defer { sqlite3_finalize(statement) }
+        var result = sqlite3_step(statement)
+        while result == SQLITE_ROW {
+            if text(statement, 1) == column { return true }
+            result = sqlite3_step(statement)
+        }
+        guard result == SQLITE_DONE else {
+            throw TaskDatabaseError(operation: "Read SQLite schema", message: String(cString: sqlite3_errmsg(database)))
+        }
+        return false
     }
 
     private func existingTaskIDs(_ database: OpaquePointer) throws -> Set<String> {
@@ -523,6 +630,104 @@ final class TaskDatabase {
             throw TaskDatabaseError(operation: "Create backup", message: "SQLite backup failed")
         }
         try pruneBackups()
+    }
+
+    private func backupInfo(for backupURL: URL) -> DatabaseBackupInfo {
+        let values = try? backupURL.resourceValues(forKeys: [
+            .creationDateKey,
+            .contentModificationDateKey,
+            .fileSizeKey
+        ])
+        let createdAt = values?.creationDate
+            ?? values?.contentModificationDate
+            ?? .distantPast
+        let size = Int64(values?.fileSize ?? 0)
+        do {
+            try validateDatabase(at: backupURL)
+            let backup = try TaskDatabase(
+                url: backupURL,
+                backupDirectory: backupDirectory,
+                readOnly: true,
+                fileManager: fileManager
+            )
+            return DatabaseBackupInfo(
+                url: backupURL,
+                createdAt: createdAt,
+                size: size,
+                taskCount: try backup.taskCount(),
+                focusSessionCount: try backup.focusSessionCount(),
+                validationError: nil
+            )
+        } catch {
+            return DatabaseBackupInfo(
+                url: backupURL,
+                createdAt: createdAt,
+                size: size,
+                taskCount: nil,
+                focusSessionCount: nil,
+                validationError: error.localizedDescription
+            )
+        }
+    }
+
+    private func validateDatabase(at databaseURL: URL) throws {
+        var database: OpaquePointer?
+        guard sqlite3_open_v2(
+            databaseURL.path,
+            &database,
+            SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX,
+            nil
+        ) == SQLITE_OK, let database else {
+            if let database { sqlite3_close(database) }
+            throw TaskDatabaseError(operation: "Validate backup", message: "Could not open the database")
+        }
+        defer { sqlite3_close(database) }
+        sqlite3_busy_timeout(database, 5_000)
+        let statement = try prepare(database, sql: "PRAGMA integrity_check")
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW, text(statement, 0).lowercased() == "ok" else {
+            throw TaskDatabaseError(operation: "Validate backup", message: "SQLite integrity check failed")
+        }
+        _ = try scalarInt(database, sql: "SELECT COUNT(*) FROM tasks")
+        _ = try scalarInt(database, sql: "SELECT COUNT(*) FROM focus_sessions")
+    }
+
+    private func copyDatabase(from sourceURL: URL, to destinationURL: URL) throws {
+        var source: OpaquePointer?
+        var destination: OpaquePointer?
+        guard sqlite3_open_v2(
+            sourceURL.path,
+            &source,
+            SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX,
+            nil
+        ) == SQLITE_OK, let source else {
+            if let source { sqlite3_close(source) }
+            throw TaskDatabaseError(operation: "Restore backup", message: "Could not open the selected backup")
+        }
+        defer { sqlite3_close(source) }
+
+        guard sqlite3_open_v2(
+            destinationURL.path,
+            &destination,
+            SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,
+            nil
+        ) == SQLITE_OK, let destination else {
+            if let destination { sqlite3_close(destination) }
+            throw TaskDatabaseError(operation: "Restore backup", message: "Could not create the restore database")
+        }
+        defer { sqlite3_close(destination) }
+
+        guard let backup = sqlite3_backup_init(destination, "main", source, "main") else {
+            throw TaskDatabaseError(
+                operation: "Restore backup",
+                message: String(cString: sqlite3_errmsg(destination))
+            )
+        }
+        let stepResult = sqlite3_backup_step(backup, -1)
+        let finishResult = sqlite3_backup_finish(backup)
+        guard stepResult == SQLITE_DONE, finishResult == SQLITE_OK else {
+            throw TaskDatabaseError(operation: "Restore backup", message: "SQLite restore copy failed")
+        }
     }
 
     private func pruneBackups() throws {

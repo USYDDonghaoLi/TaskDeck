@@ -68,16 +68,39 @@ struct DashboardView: View {
         .foregroundStyle(DeckTheme.text)
         .fontDesign(.monospaced)
         .overlay(alignment: .bottom) {
-            if let error = store.persistenceError {
-                Label(localizedPersistenceError(error), systemImage: "externaldrive.badge.exclamationmark")
+            VStack(spacing: 8) {
+                if let deleted = store.lastDeletedTask {
+                    HStack(spacing: 12) {
+                        Label(
+                            language.format("“%@”已移到回收站", "“%@” moved to Trash", deleted.title),
+                            systemImage: "trash"
+                        )
+                        Button(language.text("撤销", "Undo")) {
+                            if let restored = store.undoLastDelete() {
+                                notifications.schedule(for: restored)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(DeckTheme.cyan)
+                        .fontWeight(.black)
+                    }
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(DeckTheme.warning)
                     .padding(.horizontal, 14)
                     .frame(height: 34)
                     .background(DeckTheme.panelRaised)
                     .clipShape(Capsule())
-                    .padding(.bottom, 12)
+                }
+                if let error = store.persistenceError {
+                    Label(localizedPersistenceError(error), systemImage: "externaldrive.badge.exclamationmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(DeckTheme.warning)
+                        .padding(.horizontal, 14)
+                        .frame(height: 34)
+                        .background(DeckTheme.panelRaised)
+                        .clipShape(Capsule())
+                }
             }
+            .padding(.bottom, 12)
         }
         .sheet(isPresented: $showingComposer, onDismiss: { editingTask = nil }) {
             TaskComposerView(editingTask: editingTask)
@@ -123,7 +146,7 @@ struct DashboardView: View {
             url.host?.lowercased() == "task",
             let idText = url.pathComponents.dropFirst().first,
             let id = UUID(uuidString: idText),
-            let task = store.tasks.first(where: { $0.id == id })
+            let task = store.activeTasks.first(where: { $0.id == id })
         else { return }
 
         filter = task.isCompleted ? .completed : .inbox
