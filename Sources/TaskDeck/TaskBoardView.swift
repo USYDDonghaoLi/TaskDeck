@@ -209,6 +209,20 @@ private struct TaskCard: View {
             Spacer(minLength: 10)
 
             Button {
+                onEdit(task)
+            } label: {
+                Image(systemName: "pencil")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(DeckTheme.text)
+                    .frame(width: 28, height: 28)
+                    .background(DeckTheme.panelRaised)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(DeckTheme.border))
+            }
+            .buttonStyle(.plain)
+            .help(language.text("编辑名称、时长和优先级", "Edit name, duration, and priority"))
+
+            Button {
                 _ = focus.beginOrToggle(task)
             } label: {
                 Image(systemName: focusSymbol)

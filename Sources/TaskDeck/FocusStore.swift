@@ -1,65 +1,36 @@
 import Foundation
 
-struct FocusSession: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    let taskID: UUID
-    let taskTitle: String
-    let direction: String
-    let startedAt: Date
-    let endedAt: Date
-    let durationSeconds: Int
-
-    init(
-        id: UUID = UUID(),
-        taskID: UUID,
-        taskTitle: String,
-        direction: String,
-        startedAt: Date,
-        endedAt: Date,
-        durationSeconds: Int
-    ) {
-        self.id = id
-        self.taskID = taskID
-        self.taskTitle = taskTitle
-        self.direction = direction
-        self.startedAt = startedAt
-        self.endedAt = endedAt
-        self.durationSeconds = max(1, durationSeconds)
-    }
-}
-
-struct ActiveFocus: Codable, Equatable, Sendable {
-    let taskID: UUID
-    let taskTitle: String
-    let direction: String
-    let initiatedAt: Date
-    let estimatedMinutes: Int
-    var runningSince: Date?
-    var accumulatedSeconds: TimeInterval
-
-    var isPaused: Bool { runningSince == nil }
-}
-
-private struct FocusRuntimeState: Codable {
-    var active: ActiveFocus?
-}
-
 @MainActor
 final class FocusStore: ObservableObject {
     @Published private(set) var sessions: [FocusSession] = []
     @Published private(set) var active: ActiveFocus?
+    @Published private(set) var persistenceError: String?
 
-    private let sessionsURL: URL
-    private let runtimeURL: URL
+    let databaseURL: URL
     private let calendar: Calendar
-    private var sessionsLoadFailed = false
+    private var database: TaskDatabase?
 
-    init(baseDirectory: URL? = nil, calendar: Calendar = .current) {
-        let directory = baseDirectory ?? Self.defaultDirectory()
-        self.sessionsURL = directory.appendingPathComponent("focus-sessions.json")
-        self.runtimeURL = directory.appendingPathComponent("focus-runtime.json")
+    init(
+        databaseURL: URL? = nil,
+        legacyDirectory: URL? = nil,
+        calendar: Calendar = .current
+    ) {
+        self.databaseURL = databaseURL ?? TaskDeckShared.databaseURL()
         self.calendar = calendar
-        load()
+        do {
+            let database = try TaskDatabase(url: self.databaseURL)
+            if databaseURL == nil || legacyDirectory != nil {
+                try TaskDeckShared.migrateLegacyFocusIfNeeded(
+                    into: database,
+                    legacyDirectory: legacyDirectory
+                )
+            }
+            self.database = database
+            try load(from: database)
+        } catch {
+            persistenceError = error.localizedDescription
+            NSLog("TaskDeck could not initialize focus database: %@", error.localizedDescription)
+        }
     }
 
     @discardableResult
@@ -73,7 +44,7 @@ final class FocusStore: ObservableObject {
                 active.runningSince = now
             }
             self.active = active
-            saveRuntime()
+            persist(reason: "focus-toggle")
             return true
         }
 
@@ -86,7 +57,7 @@ final class FocusStore: ObservableObject {
             runningSince: now,
             accumulatedSeconds: 0
         )
-        saveRuntime()
+        persist(reason: "focus-start")
         return true
     }
 
@@ -95,14 +66,14 @@ final class FocusStore: ObservableObject {
         active.accumulatedSeconds += max(0, now.timeIntervalSince(runningSince))
         active.runningSince = nil
         self.active = active
-        saveRuntime()
+        persist(reason: "focus-pause")
     }
 
     func resume(now: Date = Date()) {
         guard var active, active.runningSince == nil else { return }
         active.runningSince = now
         self.active = active
-        saveRuntime()
+        persist(reason: "focus-resume")
     }
 
     @discardableResult
@@ -120,14 +91,13 @@ final class FocusStore: ObservableObject {
         sessions.append(session)
         sessions.sort { $0.endedAt > $1.endedAt }
         self.active = nil
-        saveSessions()
-        saveRuntime()
+        persist(reason: "focus-finish")
         return session
     }
 
     func discardActive() {
         active = nil
-        saveRuntime()
+        persist(reason: "focus-discard")
     }
 
     func elapsed(at date: Date = Date()) -> TimeInterval {
@@ -157,75 +127,35 @@ final class FocusStore: ObservableObject {
         return totalSeconds(in: DateInterval(start: start, end: end))
     }
 
+    func refreshFromDatabase() {
+        guard let database else { return }
+        do {
+            try load(from: database)
+            persistenceError = nil
+        } catch {
+            persistenceError = error.localizedDescription
+            NSLog("TaskDeck could not refresh focus database: %@", error.localizedDescription)
+        }
+    }
+
     private func elapsed(for active: ActiveFocus, at date: Date) -> TimeInterval {
         let runningSeconds = active.runningSince.map { max(0, date.timeIntervalSince($0)) } ?? 0
         return active.accumulatedSeconds + runningSeconds
     }
 
-    private func load() {
-        if FileManager.default.fileExists(atPath: sessionsURL.path) {
-            do {
-                sessions = try JSONDecoder.focus.decode([FocusSession].self, from: Data(contentsOf: sessionsURL))
-                    .sorted { $0.endedAt > $1.endedAt }
-            } catch {
-                sessionsLoadFailed = true
-                NSLog("TaskDeck could not load focus sessions: %@", error.localizedDescription)
-            }
-        }
-
-        if FileManager.default.fileExists(atPath: runtimeURL.path) {
-            do {
-                active = try JSONDecoder.focus.decode(FocusRuntimeState.self, from: Data(contentsOf: runtimeURL)).active
-            } catch {
-                NSLog("TaskDeck could not restore active focus: %@", error.localizedDescription)
-            }
-        }
+    private func load(from database: TaskDatabase) throws {
+        sessions = try database.loadFocusSessions().sorted { $0.endedAt > $1.endedAt }
+        active = try database.loadActiveFocus()
     }
 
-    private func saveSessions() {
-        guard !sessionsLoadFailed else { return }
+    private func persist(reason: String) {
+        guard let database else { return }
         do {
-            try prepareDirectory()
-            let data = try JSONEncoder.focus.encode(sessions)
-            try data.write(to: sessionsURL, options: .atomic)
+            try database.replaceFocus(sessions: sessions, active: active, reason: reason)
+            persistenceError = nil
         } catch {
-            NSLog("TaskDeck could not save focus sessions: %@", error.localizedDescription)
+            persistenceError = error.localizedDescription
+            NSLog("TaskDeck could not save focus data: %@", error.localizedDescription)
         }
-    }
-
-    private func saveRuntime() {
-        do {
-            try prepareDirectory()
-            let data = try JSONEncoder.focus.encode(FocusRuntimeState(active: active))
-            try data.write(to: runtimeURL, options: .atomic)
-        } catch {
-            NSLog("TaskDeck could not save focus runtime: %@", error.localizedDescription)
-        }
-    }
-
-    private func prepareDirectory() throws {
-        try FileManager.default.createDirectory(at: sessionsURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-    }
-
-    private static func defaultDirectory() -> URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("TaskDeck", isDirectory: true)
-    }
-}
-
-private extension JSONEncoder {
-    static var focus: JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return encoder
-    }
-}
-
-private extension JSONDecoder {
-    static var focus: JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
     }
 }

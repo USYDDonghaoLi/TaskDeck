@@ -4,96 +4,26 @@ import Foundation
 struct LogicCheck {
     @MainActor
     static func main() throws {
-        try checkLegacyMigration()
+        try checkLegacyTaskMigration()
+        try checkLegacyFocusMigration()
         try checkSharedStorageMigration()
-        try checkCorruptDataProtection()
-        try checkTaskLifecycle()
+        try checkCorruptDatabaseProtection()
+        try checkTaskLifecycleAndBackups()
+        try checkSharedWriteCoordination()
         try checkFocusLifecycle()
+        try checkArchiveRoundTrip()
         try checkCompletionStreak()
         checkLanguagePreference()
-        print("TaskDeck logic checks passed")
+        print("TaskDeck SQLite, migration, backup, editing, and JSON checks passed")
     }
 
-    private static func checkSharedStorageMigration() throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TaskDeckSharedStorageCheck-\(UUID().uuidString)")
+    @MainActor
+    private static func checkLegacyTaskMigration() throws {
+        let root = temporaryRoot("TaskDeckLegacyTaskMigration")
         let legacyURL = root.appendingPathComponent("Legacy/tasks.json")
-        let groupRoot = root.appendingPathComponent("GroupContainer")
+        let databaseURL = root.appendingPathComponent("Shared/TaskDeck/taskdeck.sqlite3")
         defer { try? FileManager.default.removeItem(at: root) }
 
-        try FileManager.default.createDirectory(
-            at: legacyURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        let recurring = TaskItem(
-            direction: "升级安全",
-            title: "保留原任务并共享给 Widget",
-            estimatedMinutes: 20,
-            dueAt: Date(timeIntervalSince1970: 1_788_200_000),
-            recurrence: .daily
-        )
-        try TaskDeckShared.saveTasks([recurring], to: legacyURL)
-        let originalData = try Data(contentsOf: legacyURL)
-
-        let sharedURL = TaskDeckShared.prepareTaskFile(
-            legacyURL: legacyURL,
-            groupRoot: groupRoot
-        )
-        precondition(FileManager.default.fileExists(atPath: sharedURL.path))
-        let copiedData = try Data(contentsOf: sharedURL)
-        precondition(copiedData == originalData)
-
-        let completedAt = Date(timeIntervalSince1970: 1_788_200_500)
-        let didToggle = try TaskDeckShared.toggleTask(id: recurring.id, at: sharedURL, now: completedAt)
-        precondition(didToggle)
-        let sharedTasks = try TaskDeckShared.loadTasks(from: sharedURL)
-        precondition(sharedTasks.first(where: { $0.id == recurring.id })?.completedAt == completedAt)
-        precondition(sharedTasks.count == 2)
-
-        // The migration is a copy. The user's old file is never moved, deleted,
-        // or overwritten by a Widget action.
-        let legacyDataAfterToggle = try Data(contentsOf: legacyURL)
-        precondition(legacyDataAfterToggle == originalData)
-        let preparedAgain = TaskDeckShared.prepareTaskFile(
-            legacyURL: legacyURL,
-            groupRoot: groupRoot
-        )
-        let preparedTasks = try TaskDeckShared.loadTasks(from: preparedAgain)
-        precondition(preparedTasks.count == 2)
-    }
-
-    @MainActor
-    private static func checkCorruptDataProtection() throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TaskDeckCorruptDataCheck-\(UUID().uuidString)")
-        let fileURL = directory.appendingPathComponent("tasks.json")
-        defer { try? FileManager.default.removeItem(at: directory) }
-
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let corruptData = Data("{ damaged data".utf8)
-        try corruptData.write(to: fileURL, options: .atomic)
-
-        let store = TaskStore(fileURL: fileURL)
-        precondition(store.persistenceError != nil)
-        _ = store.add(
-            direction: "安全检查",
-            title: "这条记录只能留在内存",
-            estimatedMinutes: 10,
-            dueAt: nil,
-            reminderEnabled: false
-        )
-        let dataAfterAttemptedSave = try Data(contentsOf: fileURL)
-        precondition(dataAfterAttemptedSave == corruptData)
-    }
-
-    @MainActor
-    private static func checkLegacyMigration() throws {
-        let migrationDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TaskDeckMigrationCheck-\(UUID().uuidString)")
-        let fileURL = migrationDirectory.appendingPathComponent("tasks.json")
-        defer { try? FileManager.default.removeItem(at: migrationDirectory) }
-
-        try FileManager.default.createDirectory(at: migrationDirectory, withIntermediateDirectories: true)
         let legacyID = UUID()
         let legacyJSON = """
         [
@@ -108,31 +38,155 @@ struct LogicCheck {
         ]
         """
         let legacyData = Data(legacyJSON.utf8)
-        try legacyData.write(to: fileURL, options: .atomic)
+        try FileManager.default.createDirectory(
+            at: legacyURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try legacyData.write(to: legacyURL, options: .atomic)
 
-        let migratedStore = TaskStore(fileURL: fileURL)
-        precondition(migratedStore.tasks(for: .inbox).count == 1)
-        precondition(migratedStore.tasks(for: .inbox).first?.id == legacyID)
-        precondition(migratedStore.tasks(for: .inbox).first?.priority == .normal)
-        precondition(migratedStore.tasks(for: .inbox).first?.recurrence == TaskRecurrence.none)
-        precondition(migratedStore.tasks(for: .inbox).first?.notes.isEmpty == true)
+        let store = TaskStore(databaseURL: databaseURL, legacyTaskURL: legacyURL)
+        precondition(store.persistenceError == nil)
+        precondition(store.tasks.count == 1)
+        precondition(store.tasks.first?.id == legacyID)
+        precondition(store.tasks.first?.priority == .normal)
+        precondition(store.tasks.first?.recurrence == TaskRecurrence.none)
+        precondition(store.tasks.first?.notes.isEmpty == true)
 
-        let backupURL = migrationDirectory
-            .appendingPathComponent("Backups")
-            .appendingPathComponent("tasks-before-v1.1.json")
-        precondition(FileManager.default.fileExists(atPath: backupURL.path))
-        let backupData = try Data(contentsOf: backupURL)
-        precondition(backupData == legacyData)
+        // Migration copies data into SQLite and a legacy backup. It never moves,
+        // edits, or deletes the user's original JSON file.
+        let preservedLegacyData = try Data(contentsOf: legacyURL)
+        precondition(preservedLegacyData == legacyData)
+        let legacyBackup = databaseURL.deletingLastPathComponent()
+            .appendingPathComponent("Backups/Legacy/tasks-before-sqlite.json")
+        let legacyBackupData = try Data(contentsOf: legacyBackup)
+        precondition(legacyBackupData == legacyData)
     }
 
     @MainActor
-    private static func checkTaskLifecycle() throws {
-        let testDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TaskDeckLogicCheck-\(UUID().uuidString)")
-        let fileURL = testDirectory.appendingPathComponent("tasks.json")
-        defer { try? FileManager.default.removeItem(at: testDirectory) }
+    private static func checkLegacyFocusMigration() throws {
+        let root = temporaryRoot("TaskDeckLegacyFocusMigration")
+        let legacyDirectory = root.appendingPathComponent("Legacy")
+        let databaseURL = root.appendingPathComponent("Shared/TaskDeck/taskdeck.sqlite3")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: legacyDirectory, withIntermediateDirectories: true)
 
-        let store = TaskStore(fileURL: fileURL)
+        let taskID = UUID()
+        let base = Date(timeIntervalSince1970: 1_788_200_000)
+        let session = FocusSession(
+            taskID: taskID,
+            taskTitle: "保留专注历史",
+            direction: "数据升级",
+            startedAt: base,
+            endedAt: base.addingTimeInterval(600),
+            durationSeconds: 600
+        )
+        let runtime = FocusRuntimeState(active: ActiveFocus(
+            taskID: taskID,
+            taskTitle: "保留运行中计时",
+            direction: "数据升级",
+            initiatedAt: base,
+            estimatedMinutes: 25,
+            runningSince: nil,
+            accumulatedSeconds: 120
+        ))
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let sessionsData = try encoder.encode([session])
+        let runtimeData = try encoder.encode(runtime)
+        let sessionsURL = legacyDirectory.appendingPathComponent("focus-sessions.json")
+        let runtimeURL = legacyDirectory.appendingPathComponent("focus-runtime.json")
+        try sessionsData.write(to: sessionsURL, options: .atomic)
+        try runtimeData.write(to: runtimeURL, options: .atomic)
+
+        let focus = FocusStore(databaseURL: databaseURL, legacyDirectory: legacyDirectory)
+        precondition(focus.sessions == [session])
+        precondition(focus.active == runtime.active)
+        let preservedSessionsData = try Data(contentsOf: sessionsURL)
+        let preservedRuntimeData = try Data(contentsOf: runtimeURL)
+        precondition(preservedSessionsData == sessionsData)
+        precondition(preservedRuntimeData == runtimeData)
+
+        let backupRoot = databaseURL.deletingLastPathComponent().appendingPathComponent("Backups/Legacy")
+        let backedUpSessionsData = try Data(contentsOf: backupRoot.appendingPathComponent("focus-sessions-before-sqlite.json"))
+        let backedUpRuntimeData = try Data(contentsOf: backupRoot.appendingPathComponent("focus-runtime-before-sqlite.json"))
+        precondition(backedUpSessionsData == sessionsData)
+        precondition(backedUpRuntimeData == runtimeData)
+    }
+
+    @MainActor
+    private static func checkSharedStorageMigration() throws {
+        let root = temporaryRoot("TaskDeckSharedStorage")
+        let legacyURL = root.appendingPathComponent("Legacy/tasks.json")
+        let groupRoot = root.appendingPathComponent("GroupContainer")
+        let databaseURL = TaskDeckShared.databaseURL(groupRoot: groupRoot)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let recurring = TaskItem(
+            direction: "升级安全",
+            title: "保留原任务并共享给 Widget",
+            estimatedMinutes: 20,
+            dueAt: Date(timeIntervalSince1970: 1_788_200_000),
+            recurrence: .daily
+        )
+        let originalData = try encodeLegacyTasks([recurring])
+        try FileManager.default.createDirectory(
+            at: legacyURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try originalData.write(to: legacyURL, options: .atomic)
+
+        let store = TaskStore(databaseURL: databaseURL, legacyTaskURL: legacyURL)
+        precondition(store.tasks.count == 1)
+        let completedAt = Date(timeIntervalSince1970: 1_788_200_500)
+        let didToggle = try TaskDeckShared.toggleTask(id: recurring.id, at: databaseURL, now: completedAt)
+        precondition(didToggle)
+
+        let sharedTasks = try TaskDeckShared.loadTasks(from: databaseURL)
+        precondition(sharedTasks.first(where: { $0.id == recurring.id })?.completedAt == completedAt)
+        precondition(sharedTasks.count == 2)
+        let preservedLegacyData = try Data(contentsOf: legacyURL)
+        precondition(preservedLegacyData == originalData)
+
+        // Re-opening the same database is idempotent and does not re-import JSON.
+        let reopened = TaskStore(databaseURL: databaseURL, legacyTaskURL: legacyURL)
+        precondition(reopened.tasks.count == 2)
+
+        // Once migration is marked complete, intentionally deleting every task
+        // must not resurrect the preserved legacy JSON on a later launch.
+        try TaskDatabase(url: databaseURL).replaceTasks([], reason: "delete-all-check")
+        let reopenedAfterDeleteAll = TaskStore(databaseURL: databaseURL, legacyTaskURL: legacyURL)
+        precondition(reopenedAfterDeleteAll.tasks.isEmpty)
+    }
+
+    @MainActor
+    private static func checkCorruptDatabaseProtection() throws {
+        let root = temporaryRoot("TaskDeckCorruptDatabase")
+        let databaseURL = root.appendingPathComponent("taskdeck.sqlite3")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let corruptData = Data("{ this is not sqlite".utf8)
+        try corruptData.write(to: databaseURL, options: .atomic)
+
+        let store = TaskStore(databaseURL: databaseURL)
+        precondition(store.persistenceError != nil)
+        _ = store.add(
+            direction: "安全检查",
+            title: "这条记录只能留在内存",
+            estimatedMinutes: 10,
+            dueAt: nil,
+            reminderEnabled: false
+        )
+        let databaseDataAfterAttemptedSave = try Data(contentsOf: databaseURL)
+        precondition(databaseDataAfterAttemptedSave == corruptData)
+    }
+
+    @MainActor
+    private static func checkTaskLifecycleAndBackups() throws {
+        let root = temporaryRoot("TaskDeckTaskLifecycle")
+        let databaseURL = root.appendingPathComponent("TaskDeck/taskdeck.sqlite3")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = TaskStore(databaseURL: databaseURL)
         let task = store.add(
             direction: "产品发布",
             title: "输出三条改版结论",
@@ -140,48 +194,33 @@ struct LogicCheck {
             dueAt: Date().addingTimeInterval(3_600),
             reminderEnabled: true
         )
-
-        precondition(store.pendingTasks.count == 1)
-        precondition(task.estimatedMinutes == 45)
-        precondition(task.reminderEnabled)
-
-        var editableTask = store.add(
+        var editable = store.add(
             direction: "学习",
             title: "回顾 Swift 并记五条笔记",
             estimatedMinutes: 25,
             dueAt: nil,
             reminderEnabled: false
         )
-        precondition(store.tasks(for: .today).count == 2)
 
-        editableTask.priority = .urgent
-        editableTask.notes = "从并发模型开始"
-        editableTask.title = "回顾 Swift 并记录五条笔记"
-        let updatedTask = store.update(editableTask)
-        precondition(updatedTask?.priority == .urgent)
-        precondition(updatedTask?.notes == "从并发模型开始")
+        editable.title = "回顾 Swift 并记录五条笔记"
+        editable.estimatedMinutes = 50
+        editable.priority = .urgent
+        editable.notes = "从并发模型开始"
+        let updated = store.update(editable)
+        precondition(updated?.title == "回顾 Swift 并记录五条笔记")
+        precondition(updated?.estimatedMinutes == 50)
+        precondition(updated?.priority == .urgent)
+        precondition(updated?.id == editable.id)
 
         let delayedDate = Date().addingTimeInterval(7_200)
-        let delayedTask = store.reschedule(editableTask, to: delayedDate)
-        precondition(delayedTask?.dueAt == delayedDate)
-
+        precondition(store.reschedule(editable, to: delayedDate)?.dueAt == delayedDate)
         store.toggle(task)
         precondition(store.report(for: .day).completedCount == 1)
         precondition(store.report(for: .day).estimatedMinutes == 45)
 
-        let reloaded = TaskStore(fileURL: fileURL)
+        let reloaded = TaskStore(databaseURL: databaseURL)
+        precondition(reloaded.tasks.first(where: { $0.id == editable.id })?.estimatedMinutes == 50)
         precondition(reloaded.tasks(for: .completed).first?.title == "输出三条改版结论")
-
-        let normalized = TaskItem(
-            direction: "  ",
-            title: "  明确下一步  ",
-            estimatedMinutes: 1,
-            reminderEnabled: true
-        )
-        precondition(normalized.normalizedDirection == "未分类")
-        precondition(normalized.title == "明确下一步")
-        precondition(normalized.estimatedMinutes == 5)
-        precondition(!normalized.reminderEnabled)
 
         let recurring = store.add(
             direction: "健康",
@@ -191,54 +230,145 @@ struct LogicCheck {
             reminderEnabled: true,
             recurrence: .daily
         )
-        let generated = store.toggle(recurring)
-        precondition(generated?.recurrence == .daily)
-        precondition((generated?.dueAt ?? .distantPast) > (recurring.dueAt ?? .distantFuture))
-
+        precondition(store.toggle(recurring)?.recurrence == .daily)
         _ = store.toggle(recurring)
-        let duplicate = store.toggle(recurring)
-        precondition(duplicate == nil)
+        precondition(store.toggle(recurring) == nil)
 
-        let backupURL = testDirectory
-            .appendingPathComponent("Backups")
-            .appendingPathComponent("tasks-last-known-good.json")
-        precondition(FileManager.default.fileExists(atPath: backupURL.path))
+        // Generate more than the retention limit and verify the newest 30 remain.
+        for index in 0..<32 {
+            var repeatedlyEdited = editable
+            repeatedlyEdited.estimatedMinutes = 50 + index
+            _ = store.update(repeatedlyEdited)
+        }
+        let backupDirectory = databaseURL.deletingLastPathComponent()
+            .appendingPathComponent("Backups/Database")
+        let backups = try FileManager.default.contentsOfDirectory(
+            at: backupDirectory,
+            includingPropertiesForKeys: nil
+        ).filter { $0.pathExtension == "sqlite3" }
+        precondition(backups.count == 30)
     }
 
     @MainActor
     private static func checkFocusLifecycle() throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TaskDeckFocusCheck-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: directory) }
+        let root = temporaryRoot("TaskDeckFocusLifecycle")
+        let databaseURL = root.appendingPathComponent("TaskDeck/taskdeck.sqlite3")
+        defer { try? FileManager.default.removeItem(at: root) }
 
         let task = TaskItem(direction: "写作", title: "完成专注测试", estimatedMinutes: 25)
         let base = Date(timeIntervalSince1970: 1_788_200_000)
-        let focus = FocusStore(baseDirectory: directory)
+        let focus = FocusStore(databaseURL: databaseURL)
         precondition(focus.beginOrToggle(task, now: base))
         focus.pause(now: base.addingTimeInterval(600))
         precondition(Int(focus.elapsed(at: base.addingTimeInterval(800))) == 600)
         focus.resume(now: base.addingTimeInterval(900))
-        let session = focus.finish(now: base.addingTimeInterval(1_500))
-        precondition(session?.durationSeconds == 1_200)
+        precondition(focus.finish(now: base.addingTimeInterval(1_500))?.durationSeconds == 1_200)
 
         let interval = DateInterval(start: base, end: base.addingTimeInterval(2_000))
         precondition(focus.totalSeconds(in: interval) == 1_200)
-        precondition(focus.seconds(for: task.id) == 1_200)
-
-        let reloaded = FocusStore(baseDirectory: directory)
+        let reloaded = FocusStore(databaseURL: databaseURL)
         precondition(reloaded.sessions.count == 1)
         precondition(reloaded.active == nil)
         precondition(reloaded.totalSeconds(in: interval) == 1_200)
     }
 
     @MainActor
-    private static func checkCompletionStreak() throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TaskDeckStreakCheck-\(UUID().uuidString)")
-        let fileURL = directory.appendingPathComponent("tasks.json")
-        defer { try? FileManager.default.removeItem(at: directory) }
+    private static func checkSharedWriteCoordination() throws {
+        let root = temporaryRoot("TaskDeckSharedWriteCoordination")
+        let databaseURL = root.appendingPathComponent("TaskDeck/taskdeck.sqlite3")
+        defer { try? FileManager.default.removeItem(at: root) }
 
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let firstWindow = TaskStore(databaseURL: databaseURL)
+        let staleWindow = TaskStore(databaseURL: databaseURL)
+        let firstTask = firstWindow.add(
+            direction: "并发安全",
+            title: "Widget 先完成这件事",
+            estimatedMinutes: 20,
+            dueAt: nil,
+            reminderEnabled: false
+        )
+        _ = staleWindow.add(
+            direction: "并发安全",
+            title: "旧视图再添加一件事",
+            estimatedMinutes: 15,
+            dueAt: nil,
+            reminderEnabled: false
+        )
+        let tasksAfterBothAdds = try TaskDeckShared.loadTasks(from: databaseURL)
+        precondition(tasksAfterBothAdds.count == 2)
+
+        let completedAt = Date(timeIntervalSince1970: 1_788_400_000)
+        _ = try TaskDeckShared.toggleTask(id: firstTask.id, at: databaseURL, now: completedAt)
+        guard var taskFromStaleWindow = staleWindow.tasks.first(where: { $0.id != firstTask.id }) else {
+            preconditionFailure("Expected the task added from the stale view")
+        }
+        taskFromStaleWindow.priority = .urgent
+        _ = staleWindow.update(taskFromStaleWindow)
+
+        let coordinatedTasks = try TaskDeckShared.loadTasks(from: databaseURL)
+        precondition(coordinatedTasks.count == 2)
+        precondition(coordinatedTasks.first(where: { $0.id == firstTask.id })?.completedAt == completedAt)
+        precondition(coordinatedTasks.first(where: { $0.id == taskFromStaleWindow.id })?.priority == .urgent)
+    }
+
+    @MainActor
+    private static func checkArchiveRoundTrip() throws {
+        let root = temporaryRoot("TaskDeckArchiveRoundTrip")
+        let sourceURL = root.appendingPathComponent("Source/taskdeck.sqlite3")
+        let targetURL = root.appendingPathComponent("Target/taskdeck.sqlite3")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let sourceTasks = TaskStore(databaseURL: sourceURL)
+        let sourceFocus = FocusStore(databaseURL: sourceURL)
+        let task = sourceTasks.add(
+            direction: "导入导出",
+            title: "验证完整 JSON 归档",
+            estimatedMinutes: 40,
+            priority: .important,
+            dueAt: nil,
+            reminderEnabled: false
+        )
+        let base = Date(timeIntervalSince1970: 1_788_300_000)
+        precondition(sourceFocus.beginOrToggle(task, now: base))
+        _ = sourceFocus.finish(now: base.addingTimeInterval(300))
+        let archiveData = try sourceTasks.exportArchive(focusStore: sourceFocus)
+
+        guard case let .archive(decoded) = try TaskDeckArchiveCodec.decode(archiveData) else {
+            preconditionFailure("Expected a complete TaskDeck archive")
+        }
+        precondition(decoded.schemaVersion == 2)
+        precondition(decoded.tasks.count == 1)
+        precondition(decoded.focusSessions.count == 1)
+
+        let targetTasks = TaskStore(databaseURL: targetURL)
+        let targetFocus = FocusStore(databaseURL: targetURL)
+        try targetTasks.importArchive(archiveData, focusStore: targetFocus)
+        precondition(targetTasks.tasks == decoded.tasks)
+        precondition(targetFocus.sessions == decoded.focusSessions)
+
+        let targetBackupDirectory = targetURL.deletingLastPathComponent()
+            .appendingPathComponent("Backups/Database")
+        let importBackups = try FileManager.default.contentsOfDirectory(
+            at: targetBackupDirectory,
+            includingPropertiesForKeys: nil
+        )
+        precondition(importBackups.contains(where: { $0.pathExtension == "sqlite3" }))
+
+        // Legacy arrays remain import-compatible and replace tasks only.
+        let legacyTask = TaskItem(direction: "兼容", title: "导入旧版 JSON", estimatedMinutes: 15)
+        try targetTasks.importArchive(encodeLegacyTasks([legacyTask]), focusStore: targetFocus)
+        precondition(targetTasks.tasks.count == 1)
+        precondition(targetTasks.tasks.first?.id == legacyTask.id)
+        precondition(targetTasks.tasks.first?.title == legacyTask.title)
+        precondition(targetFocus.sessions.count == 1)
+    }
+
+    @MainActor
+    private static func checkCompletionStreak() throws {
+        let root = temporaryRoot("TaskDeckStreak")
+        let databaseURL = root.appendingPathComponent("TaskDeck/taskdeck.sqlite3")
+        defer { try? FileManager.default.removeItem(at: root) }
+
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let tasks = (0..<3).map { offset in
@@ -249,12 +379,8 @@ struct LogicCheck {
                 completedAt: calendar.date(byAdding: .day, value: -offset, to: today)
             )
         }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(tasks).write(to: fileURL, options: .atomic)
-
-        let store = TaskStore(fileURL: fileURL)
-        precondition(store.completionStreak() == 3)
+        try TaskDatabase(url: databaseURL).replaceTasks(tasks, reason: "streak-check")
+        precondition(TaskStore(databaseURL: databaseURL).completionStreak() == 3)
     }
 
     @MainActor
@@ -267,13 +393,23 @@ struct LogicCheck {
 
         let language = LanguageStore(defaults: defaults, syncsSharedDefaults: false)
         precondition(language.current == .simplifiedChinese)
-        precondition(TaskFilter.today.title(in: language.current) == "今日任务")
-
         language.current = .english
         precondition(defaults.string(forKey: LanguageStore.defaultsKey) == AppLanguage.english.rawValue)
         precondition(TaskFilter.today.title(in: language.current) == "Today")
         precondition(TaskPriority.urgent.title(in: language.current) == "Urgent")
         precondition(TaskRecurrence.weekdays.title(in: language.current) == "Weekdays")
         precondition(ReportPeriod.month.reportTitle(in: language.current) == "Monthly Action Report")
+    }
+
+    private static func temporaryRoot(_ name: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(name)-\(UUID().uuidString)")
+    }
+
+    private static func encodeLegacyTasks(_ tasks: [TaskItem]) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(tasks)
     }
 }

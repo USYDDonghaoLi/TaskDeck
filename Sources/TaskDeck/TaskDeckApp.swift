@@ -30,5 +30,13 @@ struct TaskDeckApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 370, height: 520)
+
+        Settings {
+            SettingsView()
+                .environmentObject(store)
+                .environmentObject(focus)
+                .environmentObject(language)
+                .environment(\.locale, language.current.locale)
+        }
     }
 }

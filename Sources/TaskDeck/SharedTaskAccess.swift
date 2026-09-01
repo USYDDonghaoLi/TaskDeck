@@ -4,7 +4,10 @@ enum TaskDeckShared {
     static let appGroupIdentifier = "group.local.taskdeck.shared"
     static let widgetKind = "local.taskdeck.macos.widget.today"
     static let changeNotification = Notification.Name("local.taskdeck.tasks.changed")
-    static let relativeTaskPath = "TaskDeck/tasks.json"
+    static let relativeDatabasePath = "TaskDeck/taskdeck.sqlite3"
+    static let legacyRelativeTaskPath = "TaskDeck/tasks.json"
+    private static let taskMigrationKey = "legacy_tasks_to_sqlite_v1"
+    private static let focusMigrationKey = "legacy_focus_to_sqlite_v1"
 
     static func groupRoot(fileManager: FileManager = .default) -> URL {
         if let container = fileManager.containerURL(
@@ -13,99 +16,137 @@ enum TaskDeckShared {
             return container
         }
 
-        // Ad-hoc personal builds don't have a provisioning profile. Keeping the
-        // conventional Group Containers path makes the self-signed app and its
-        // unsandboxed extension share the same data while the App Store build
-        // automatically uses the provisioned container above.
+        // Ad-hoc personal builds don't have a provisioning profile. The main
+        // application can still use this conventional path; a system Widget
+        // requires a provisioned App Group and Apple Development signature.
         return fileManager.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Group Containers", isDirectory: true)
             .appendingPathComponent(appGroupIdentifier, isDirectory: true)
     }
 
-    static func taskFileURL(groupRoot: URL? = nil) -> URL {
-        (groupRoot ?? self.groupRoot()).appendingPathComponent(relativeTaskPath)
+    static func databaseURL(groupRoot: URL? = nil) -> URL {
+        (groupRoot ?? self.groupRoot()).appendingPathComponent(relativeDatabasePath)
     }
 
-    static func prepareTaskFile(
-        legacyURL: URL,
-        groupRoot: URL? = nil,
+    static func legacyTaskFileURL(groupRoot: URL? = nil) -> URL {
+        (groupRoot ?? self.groupRoot()).appendingPathComponent(legacyRelativeTaskPath)
+    }
+
+    static func legacyApplicationSupportDirectory(fileManager: FileManager = .default) -> URL {
+        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("TaskDeck", isDirectory: true)
+    }
+
+    static func taskDatabase(
+        at databaseURL: URL? = nil,
+        legacyTaskURL: URL? = nil,
         fileManager: FileManager = .default
-    ) -> URL {
-        let sharedURL = taskFileURL(groupRoot: groupRoot)
-        do {
-            try fileManager.createDirectory(
-                at: sharedURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
+    ) throws -> TaskDatabase {
+        let database = try TaskDatabase(url: databaseURL ?? self.databaseURL(), fileManager: fileManager)
+        if databaseURL == nil || legacyTaskURL != nil {
+            try migrateLegacyTasksIfNeeded(
+                into: database,
+                explicitLegacyURL: legacyTaskURL,
+                fileManager: fileManager
             )
-            if !fileManager.fileExists(atPath: sharedURL.path),
-               fileManager.fileExists(atPath: legacyURL.path) {
-                try fileManager.copyItem(at: legacyURL, to: sharedURL)
-            }
-        } catch {
-            NSLog("TaskDeck could not prepare shared task storage: %@", error.localizedDescription)
-            return legacyURL
         }
-        return sharedURL
+        return database
     }
 
-    static func loadTasks(from url: URL? = nil) throws -> [TaskItem] {
-        let data = try Data(contentsOf: url ?? taskFileURL())
-        return try decoder.decode([TaskItem].self, from: data)
+    static func loadTasks(from databaseURL: URL? = nil) throws -> [TaskItem] {
+        try TaskDatabase(url: databaseURL ?? self.databaseURL()).loadTasks()
     }
 
-    static func saveTasks(_ tasks: [TaskItem], to url: URL? = nil) throws {
-        let destination = url ?? taskFileURL()
-        try FileManager.default.createDirectory(
-            at: destination.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        try encoder.encode(tasks).write(to: destination, options: .atomic)
+    static func saveTasks(_ tasks: [TaskItem], to databaseURL: URL? = nil) throws {
+        try TaskDatabase(url: databaseURL ?? self.databaseURL())
+            .replaceTasks(tasks, reason: "shared-task-save")
     }
 
     @discardableResult
     static func toggleTask(
         id: UUID,
-        at url: URL? = nil,
+        at databaseURL: URL? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) throws -> Bool {
-        let destination = url ?? taskFileURL()
-        var tasks = try loadTasks(from: destination)
-        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return false }
+        let database = try TaskDatabase(url: databaseURL ?? self.databaseURL())
+        let changed = try database.mutateTasks(reason: "widget-toggle") { tasks in
+            guard let index = tasks.firstIndex(where: { $0.id == id }) else { return false }
 
-        if tasks[index].completedAt == nil {
-            tasks[index].completedAt = now
-            let completed = tasks[index]
-            if completed.recurrence != .none,
-               completed.generatedNextTaskID == nil,
-               let nextDueAt = nextOccurrence(
-                   after: completed.dueAt,
-                   recurrence: completed.recurrence,
-                   calendar: calendar
-               ) {
-                let nextTask = TaskItem(
-                    direction: completed.direction,
-                    title: completed.title,
-                    notes: completed.notes,
-                    estimatedMinutes: completed.estimatedMinutes,
-                    priority: completed.priority,
-                    dueAt: nextDueAt,
-                    reminderEnabled: completed.reminderEnabled,
-                    recurrence: completed.recurrence
-                )
-                tasks[index].generatedNextTaskID = nextTask.id
-                tasks.append(nextTask)
+            if tasks[index].completedAt == nil {
+                tasks[index].completedAt = now
+                let completed = tasks[index]
+                if completed.recurrence != .none,
+                   completed.generatedNextTaskID == nil,
+                   let nextDueAt = nextOccurrence(
+                       after: completed.dueAt,
+                       recurrence: completed.recurrence,
+                       calendar: calendar
+                   ) {
+                    let nextTask = TaskItem(
+                        direction: completed.direction,
+                        title: completed.title,
+                        notes: completed.notes,
+                        estimatedMinutes: completed.estimatedMinutes,
+                        priority: completed.priority,
+                        dueAt: nextDueAt,
+                        reminderEnabled: completed.reminderEnabled,
+                        recurrence: completed.recurrence
+                    )
+                    tasks[index].generatedNextTaskID = nextTask.id
+                    tasks.append(nextTask)
+                }
+            } else {
+                tasks[index].completedAt = nil
             }
-        } else {
-            tasks[index].completedAt = nil
+            return true
         }
 
-        try saveTasks(tasks, to: destination)
-        DistributedNotificationCenter.default().postNotificationName(
-            changeNotification,
-            object: nil
-        )
-        return true
+        if changed {
+            DistributedNotificationCenter.default().postNotificationName(
+                changeNotification,
+                object: nil
+            )
+        }
+        return changed
+    }
+
+    static func migrateLegacyFocusIfNeeded(
+        into database: TaskDatabase,
+        legacyDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) throws {
+        guard !(try database.hasMigrationMarker(focusMigrationKey)) else { return }
+        if try database.hasFocusData() {
+            try database.markMigration(focusMigrationKey)
+            return
+        }
+        let directory = legacyDirectory ?? legacyApplicationSupportDirectory(fileManager: fileManager)
+        let sessionsURL = directory.appendingPathComponent("focus-sessions.json")
+        let runtimeURL = directory.appendingPathComponent("focus-runtime.json")
+        guard fileManager.fileExists(atPath: sessionsURL.path)
+            || fileManager.fileExists(atPath: runtimeURL.path) else {
+            try database.markMigration(focusMigrationKey)
+            return
+        }
+
+        let sessions: [FocusSession]
+        if fileManager.fileExists(atPath: sessionsURL.path) {
+            sessions = try TaskDeckArchiveCodec.decodeLegacySessions(Data(contentsOf: sessionsURL))
+            try preserveLegacyFile(sessionsURL, as: "focus-sessions-before-sqlite.json", database: database)
+        } else {
+            sessions = []
+        }
+
+        let active: ActiveFocus?
+        if fileManager.fileExists(atPath: runtimeURL.path) {
+            active = try TaskDeckArchiveCodec.decodeLegacyRuntime(Data(contentsOf: runtimeURL))
+            try preserveLegacyFile(runtimeURL, as: "focus-runtime-before-sqlite.json", database: database)
+        } else {
+            active = nil
+        }
+        try database.replaceFocus(sessions: sessions, active: active, reason: "focus-json-migration")
+        try database.markMigration(focusMigrationKey)
     }
 
     static func storedLanguage() -> AppLanguage {
@@ -117,6 +158,53 @@ enum TaskDeckShared {
     static func storeLanguage(_ language: AppLanguage) {
         UserDefaults(suiteName: appGroupIdentifier)?
             .set(language.rawValue, forKey: LanguageStore.defaultsKey)
+    }
+
+    private static func migrateLegacyTasksIfNeeded(
+        into database: TaskDatabase,
+        explicitLegacyURL: URL?,
+        fileManager: FileManager
+    ) throws {
+        guard !(try database.hasMigrationMarker(taskMigrationKey)) else { return }
+        if try database.taskCount() > 0 {
+            try database.markMigration(taskMigrationKey)
+            return
+        }
+
+        let candidates: [URL]
+        if let explicitLegacyURL {
+            candidates = [explicitLegacyURL]
+        } else {
+            candidates = [
+                legacyTaskFileURL(),
+                legacyApplicationSupportDirectory(fileManager: fileManager)
+                    .appendingPathComponent("tasks.json")
+            ]
+        }
+
+        guard let source = candidates.first(where: { fileManager.fileExists(atPath: $0.path) }) else {
+            try database.markMigration(taskMigrationKey)
+            return
+        }
+        let data = try Data(contentsOf: source)
+        let tasks = try TaskDeckArchiveCodec.decodeLegacyTasks(data)
+        try preserveLegacyFile(source, as: "tasks-before-sqlite.json", database: database)
+        try database.replaceTasks(tasks, reason: "task-json-migration")
+        try database.markMigration(taskMigrationKey)
+    }
+
+    private static func preserveLegacyFile(
+        _ source: URL,
+        as name: String,
+        database: TaskDatabase,
+        fileManager: FileManager = .default
+    ) throws {
+        let directory = database.url.deletingLastPathComponent()
+            .appendingPathComponent("Backups/Legacy", isDirectory: true)
+        let destination = directory.appendingPathComponent(name)
+        guard !fileManager.fileExists(atPath: destination.path) else { return }
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        try fileManager.copyItem(at: source, to: destination)
     }
 
     private static func nextOccurrence(
@@ -143,18 +231,5 @@ enum TaskDeckShared {
         case .monthly:
             return calendar.date(byAdding: .month, value: 1, to: date)
         }
-    }
-
-    private static var encoder: JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return encoder
-    }
-
-    private static var decoder: JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
     }
 }

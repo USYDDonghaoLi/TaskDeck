@@ -137,10 +137,13 @@ struct DashboardView: View {
     private func localizedPersistenceError(_ error: String) -> String {
         guard language.current == .english else { return error }
         if error.contains("读取失败") {
-            return "Task data could not be loaded. The original file was preserved and will not be overwritten."
+            return "The task database could not be loaded. The legacy JSON and database files were preserved."
         }
         if error.contains("保存失败") {
-            return "Task data could not be saved. Keep the app open and check disk permissions."
+            return "The task database could not be saved. The pre-change backup is still available."
+        }
+        if error.contains("刷新失败") {
+            return "The shared database could not be refreshed. Existing on-screen data was retained."
         }
         return error
     }
@@ -324,25 +327,7 @@ private struct CommandHeader: View {
 
             Spacer()
 
-            Menu {
-                ForEach(AppLanguage.allCases) { item in
-                    Button {
-                        language.current = item
-                    } label: {
-                        if language.current == item {
-                            Label(item.label, systemImage: "checkmark")
-                        } else {
-                            Text(item.label)
-                        }
-                    }
-                }
-            } label: {
-                Label(language.current.shortLabel, systemImage: "globe")
-                    .headerButton()
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help(language.text("切换界面语言", "Switch interface language"))
+            settingsControl
 
             Button(action: showDesktop) {
                 Label(language.text("桌面悬浮", "Desktop Board"), systemImage: "rectangle.on.rectangle")
@@ -360,6 +345,33 @@ private struct CommandHeader: View {
         .padding(.horizontal, 24)
         .frame(height: 78)
         .background(DeckTheme.void.opacity(0.72))
+    }
+
+    @ViewBuilder
+    private var settingsControl: some View {
+        if #available(macOS 14.0, *) {
+            SettingsLink {
+                settingsLabel
+            }
+            .buttonStyle(.plain)
+            .help(language.text("打开设置与数据管理", "Open settings and data management"))
+        } else {
+            Button {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            } label: {
+                settingsLabel
+            }
+            .buttonStyle(.plain)
+            .help(language.text("打开设置与数据管理", "Open settings and data management"))
+        }
+    }
+
+    private var settingsLabel: some View {
+        Label(
+            "\(language.text("设置", "Settings")) · \(language.current.shortLabel)",
+            systemImage: "gearshape"
+        )
+        .headerButton()
     }
 }
 

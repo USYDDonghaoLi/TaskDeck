@@ -6,15 +6,31 @@ final class TaskStore: ObservableObject {
     @Published private(set) var tasks: [TaskItem] = []
     @Published private(set) var persistenceError: String?
 
-    private let fileURL: URL
+    let databaseURL: URL
     private let calendar: Calendar
+    private var database: TaskDatabase?
     private var loadFailed = false
     private var sharedChangeObserver: NSObjectProtocol?
 
-    init(fileURL: URL? = nil, calendar: Calendar = .current) {
+    init(
+        databaseURL: URL? = nil,
+        legacyTaskURL: URL? = nil,
+        calendar: Calendar = .current
+    ) {
         self.calendar = calendar
-        self.fileURL = fileURL ?? Self.defaultFileURL()
-        load()
+        self.databaseURL = databaseURL ?? TaskDeckShared.databaseURL()
+        do {
+            let database = try TaskDeckShared.taskDatabase(
+                at: databaseURL,
+                legacyTaskURL: legacyTaskURL
+            )
+            self.database = database
+            tasks = try database.loadTasks()
+        } catch {
+            loadFailed = true
+            persistenceError = "任务数据库读取失败，旧 JSON 与数据库文件均已保留。"
+            NSLog("TaskDeck could not initialize task database: %@", error.localizedDescription)
+        }
         sharedChangeObserver = DistributedNotificationCenter.default().addObserver(
             forName: TaskDeckShared.changeNotification,
             object: nil,
@@ -95,14 +111,15 @@ final class TaskStore: ObservableObject {
             reminderEnabled: reminderEnabled,
             recurrence: recurrence
         )
-        tasks.append(task)
-        save()
+        _ = mutateTasks(reason: "task-add") { persistedTasks in
+            persistedTasks.append(task)
+            return true
+        }
         return task
     }
 
     @discardableResult
     func update(_ task: TaskItem) -> TaskItem? {
-        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return nil }
         var normalized = task
         normalized.direction = task.direction.trimmingCharacters(in: .whitespacesAndNewlines)
         normalized.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -110,55 +127,72 @@ final class TaskStore: ObservableObject {
         normalized.estimatedMinutes = max(5, task.estimatedMinutes)
         normalized.reminderEnabled = task.reminderEnabled && task.dueAt != nil
         normalized.recurrence = task.dueAt == nil ? .none : task.recurrence
-        tasks[index] = normalized
-        save()
-        return normalized
+        let changed = mutateTasks(reason: "task-edit") { persistedTasks in
+            guard let index = persistedTasks.firstIndex(where: { $0.id == normalized.id }) else {
+                return false
+            }
+            persistedTasks[index] = normalized
+            return true
+        }
+        return changed ? normalized : nil
     }
 
     @discardableResult
     func toggle(_ task: TaskItem) -> TaskItem? {
-        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return nil }
         var generatedTask: TaskItem?
-
-        if tasks[index].completedAt == nil {
-            tasks[index].completedAt = Date()
-            let completedTask = tasks[index]
-            if completedTask.recurrence != .none,
-               completedTask.generatedNextTaskID == nil,
-               let nextDueAt = nextOccurrence(after: completedTask.dueAt, recurrence: completedTask.recurrence) {
-                let nextTask = TaskItem(
-                    direction: completedTask.direction,
-                    title: completedTask.title,
-                    notes: completedTask.notes,
-                    estimatedMinutes: completedTask.estimatedMinutes,
-                    priority: completedTask.priority,
-                    dueAt: nextDueAt,
-                    reminderEnabled: completedTask.reminderEnabled,
-                    recurrence: completedTask.recurrence
-                )
-                tasks[index].generatedNextTaskID = nextTask.id
-                tasks.append(nextTask)
-                generatedTask = nextTask
+        _ = mutateTasks(reason: "task-toggle") { persistedTasks in
+            guard let index = persistedTasks.firstIndex(where: { $0.id == task.id }) else {
+                return false
             }
-        } else {
-            tasks[index].completedAt = nil
-        }
 
-        save()
+            if persistedTasks[index].completedAt == nil {
+                persistedTasks[index].completedAt = Date()
+                let completedTask = persistedTasks[index]
+                if completedTask.recurrence != .none,
+                   completedTask.generatedNextTaskID == nil,
+                   let nextDueAt = nextOccurrence(after: completedTask.dueAt, recurrence: completedTask.recurrence) {
+                    let nextTask = TaskItem(
+                        direction: completedTask.direction,
+                        title: completedTask.title,
+                        notes: completedTask.notes,
+                        estimatedMinutes: completedTask.estimatedMinutes,
+                        priority: completedTask.priority,
+                        dueAt: nextDueAt,
+                        reminderEnabled: completedTask.reminderEnabled,
+                        recurrence: completedTask.recurrence
+                    )
+                    persistedTasks[index].generatedNextTaskID = nextTask.id
+                    persistedTasks.append(nextTask)
+                    generatedTask = nextTask
+                }
+            } else {
+                persistedTasks[index].completedAt = nil
+            }
+            return true
+        }
         return generatedTask
     }
 
     @discardableResult
     func reschedule(_ task: TaskItem, to date: Date) -> TaskItem? {
-        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return nil }
-        tasks[index].dueAt = date
-        save()
-        return tasks[index]
+        var updatedTask: TaskItem?
+        _ = mutateTasks(reason: "task-reschedule") { persistedTasks in
+            guard let index = persistedTasks.firstIndex(where: { $0.id == task.id }) else {
+                return false
+            }
+            persistedTasks[index].dueAt = date
+            updatedTask = persistedTasks[index]
+            return true
+        }
+        return updatedTask
     }
 
     func delete(_ task: TaskItem) {
-        tasks.removeAll { $0.id == task.id }
-        save()
+        _ = mutateTasks(reason: "task-delete") { persistedTasks in
+            guard persistedTasks.contains(where: { $0.id == task.id }) else { return false }
+            persistedTasks.removeAll { $0.id == task.id }
+            return true
+        }
     }
 
     func report(for period: ReportPeriod, reference: Date = Date()) -> ReportSnapshot {
@@ -211,49 +245,67 @@ final class TaskStore: ObservableObject {
     }
 
     func refreshFromDisk() {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+        guard let database else { return }
         do {
-            tasks = try JSONDecoder.taskDeck.decode([TaskItem].self, from: Data(contentsOf: fileURL))
+            tasks = try database.loadTasks()
             loadFailed = false
             persistenceError = nil
         } catch {
-            NSLog("TaskDeck could not reload shared tasks: %@", error.localizedDescription)
+            persistenceError = "任务数据库刷新失败，当前界面继续保留已有数据。"
+            NSLog("TaskDeck could not reload shared database: %@", error.localizedDescription)
         }
     }
 
-    private func load() {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
-        do {
-            let data = try Data(contentsOf: fileURL)
-            if Self.needsV11Migration(data) {
-                createBackup(data, named: "tasks-before-v1.1.json", overwrite: false)
-            }
-            tasks = try JSONDecoder.taskDeck.decode([TaskItem].self, from: data)
-            persistenceError = nil
-        } catch {
-            loadFailed = true
-            persistenceError = "任务数据读取失败，原文件已保留，TaskDeck 不会覆盖它。"
-            NSLog("TaskDeck could not load tasks: %@", error.localizedDescription)
-        }
+    func exportArchive(focusStore: FocusStore) throws -> Data {
+        try TaskDeckArchiveCodec.encode(TaskDeckArchive(
+            tasks: tasks,
+            focusSessions: focusStore.sessions,
+            activeFocus: focusStore.active
+        ))
     }
 
-    private func save() {
-        guard !loadFailed else { return }
-        do {
-            try FileManager.default.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
+    func importArchive(_ data: Data, focusStore: FocusStore) throws {
+        guard let database else {
+            throw TaskDatabaseError(operation: "Import JSON", message: "Database is unavailable")
+        }
+        switch try TaskDeckArchiveCodec.decode(data) {
+        case let .archive(archive):
+            try database.replaceAll(
+                tasks: archive.tasks,
+                sessions: archive.focusSessions,
+                active: archive.activeFocus
             )
-            if let previousData = try? Data(contentsOf: fileURL) {
-                createBackup(previousData, named: "tasks-last-known-good.json", overwrite: true)
+        case let .legacyTasks(importedTasks):
+            try database.replaceTasks(importedTasks, reason: "legacy-json-import")
+        }
+        refreshFromDisk()
+        focusStore.refreshFromDatabase()
+        WidgetCenter.shared.reloadTimelines(ofKind: TaskDeckShared.widgetKind)
+    }
+
+    @discardableResult
+    private func mutateTasks(
+        reason: String,
+        _ mutation: (inout [TaskItem]) -> Bool
+    ) -> Bool {
+        guard !loadFailed, let database else { return false }
+        do {
+            var latestTasks = tasks
+            let changed = try database.mutateTasks(reason: reason) { persistedTasks in
+                let changed = mutation(&persistedTasks)
+                latestTasks = persistedTasks
+                return changed
             }
-            let data = try JSONEncoder.taskDeck.encode(tasks)
-            try data.write(to: fileURL, options: .atomic)
+            tasks = latestTasks
             persistenceError = nil
-            WidgetCenter.shared.reloadTimelines(ofKind: TaskDeckShared.widgetKind)
+            if changed {
+                WidgetCenter.shared.reloadTimelines(ofKind: TaskDeckShared.widgetKind)
+            }
+            return changed
         } catch {
-            persistenceError = "任务保存失败，请保留应用并检查磁盘权限。"
-            NSLog("TaskDeck could not save tasks: %@", error.localizedDescription)
+            persistenceError = "任务数据库保存失败，修改前备份仍然保留。"
+            NSLog("TaskDeck could not save task database: %@", error.localizedDescription)
+            return false
         }
     }
 
@@ -282,14 +334,6 @@ final class TaskStore: ObservableObject {
         }
     }
 
-    private static func defaultFileURL() -> URL {
-        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let legacyURL = root
-            .appendingPathComponent("TaskDeck", isDirectory: true)
-            .appendingPathComponent("tasks.json")
-        return TaskDeckShared.prepareTaskFile(legacyURL: legacyURL)
-    }
-
     private func nextOccurrence(after date: Date?, recurrence: TaskRecurrence) -> Date? {
         guard let date else { return nil }
         switch recurrence {
@@ -312,44 +356,4 @@ final class TaskStore: ObservableObject {
         }
     }
 
-    private func createBackup(_ data: Data, named name: String, overwrite: Bool) {
-        do {
-            let backupDirectory = fileURL.deletingLastPathComponent().appendingPathComponent("Backups", isDirectory: true)
-            try FileManager.default.createDirectory(at: backupDirectory, withIntermediateDirectories: true)
-            let backupURL = backupDirectory.appendingPathComponent(name)
-            guard overwrite || !FileManager.default.fileExists(atPath: backupURL.path) else { return }
-            try data.write(to: backupURL, options: .atomic)
-        } catch {
-            NSLog("TaskDeck could not create backup: %@", error.localizedDescription)
-        }
-    }
-
-    private static func needsV11Migration(_ data: Data) -> Bool {
-        guard
-            let value = try? JSONSerialization.jsonObject(with: data),
-            let objects = value as? [[String: Any]],
-            !objects.isEmpty
-        else { return false }
-
-        return objects.contains { object in
-            object["priority"] == nil || object["recurrence"] == nil || object["notes"] == nil
-        }
-    }
-}
-
-private extension JSONEncoder {
-    static var taskDeck: JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return encoder
-    }
-}
-
-private extension JSONDecoder {
-    static var taskDeck: JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }
 }
