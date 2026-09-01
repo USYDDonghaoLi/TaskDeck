@@ -119,6 +119,6 @@ outputs/            User guides, release notes, and sample reports
 
 ## Version
 
-Current version: TaskDeck 1.9.1 (Build 11).
+Current version: TaskDeck 1.9.2 (Build 12).
 
 This is a personal vibe-coding project. The repository is private by default; it can be made public later after reviewing signing, privacy, and release configuration.

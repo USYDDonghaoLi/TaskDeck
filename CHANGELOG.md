@@ -2,6 +2,14 @@
 
 All notable TaskDeck changes are recorded here. Version numbers follow semantic versioning, while `CFBundleVersion` uses a monotonically increasing integer.
 
+## 1.9.2 (Build 12) - Reliable Language Switching
+
+- Replaced the system segmented language picker with an explicit high-contrast Chinese/English selector.
+- Fixed unreadable and unreliable language controls when macOS uses a light system appearance with TaskDeck's dark interface.
+- Applied the same control to first-run onboarding and added localized selection state for VoiceOver.
+- Reloaded Widget timelines immediately after a language change.
+- Added isolated persistence coverage for changing and reopening the selected language.
+
 ## 1.9.1 (Build 11) - Focus History Safety
 
 - Replaced full-history focus writes with guarded, transactional updates for starting, pausing, resuming, finishing, and discarding a timer.

@@ -72,14 +72,9 @@ struct SettingsView: View {
             title: language.text("界面语言", "Interface Language"),
             subtitle: language.text("修改后主窗口、悬浮窗口和 Widget 同步更新。", "The app, desktop board, and Widget update together.")
         ) {
-            Picker(language.text("界面语言", "Interface Language"), selection: $language.current) {
-                ForEach(AppLanguage.allCases) { item in
-                    Text(item.label).tag(item)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 280)
+            LanguageSelector(selection: $language.current)
+                .frame(width: 280)
+                .accessibilityLabel(language.text("界面语言", "Interface language"))
         }
     }
 

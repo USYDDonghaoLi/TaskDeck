@@ -270,13 +270,7 @@ private struct OnboardingView: View {
                 }
                 .frame(maxWidth: 780)
 
-                Picker(language.text("界面语言", "Interface Language"), selection: $language.current) {
-                    ForEach(AppLanguage.allCases) { item in
-                        Text(item.label).tag(item)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                LanguageSelector(selection: $language.current)
                 .frame(width: 220)
                 .accessibilityLabel(language.text("界面语言", "Interface language"))
 

@@ -101,6 +101,27 @@ final class TaskDeckTests: XCTestCase {
         XCTAssertNil(tasks[0].deletedAt)
     }
 
+    @MainActor
+    func testLanguageSelectionPersistsAndUpdatesCopy() throws {
+        let suiteName = "TaskDeckLanguageXCTest-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let language = LanguageStore(defaults: defaults, syncsSharedDefaults: false)
+        XCTAssertEqual(language.current, .simplifiedChinese)
+        XCTAssertEqual(language.text("设置", "Settings"), "设置")
+
+        language.current = .english
+        XCTAssertEqual(language.text("设置", "Settings"), "Settings")
+        XCTAssertEqual(
+            defaults.string(forKey: LanguageStore.defaultsKey),
+            AppLanguage.english.rawValue
+        )
+
+        let reopened = LanguageStore(defaults: defaults, syncsSharedDefaults: false)
+        XCTAssertEqual(reopened.current, .english)
+    }
+
     func testFocusWritesPreserveHistoryAndRejectStaleWindows() throws {
         try withTemporaryDatabase { databaseURL in
             let database = try TaskDatabase(url: databaseURL)

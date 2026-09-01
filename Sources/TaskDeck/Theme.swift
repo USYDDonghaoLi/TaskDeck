@@ -56,3 +56,41 @@ struct GridBackground: View {
         .allowsHitTesting(false)
     }
 }
+
+struct LanguageSelector: View {
+    @Binding var selection: AppLanguage
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(AppLanguage.allCases) { language in
+                Button {
+                    selection = language
+                } label: {
+                    Text(language.label)
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundStyle(selection == language ? DeckTheme.void : DeckTheme.text)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 30)
+                        .background(selection == language ? DeckTheme.cyan : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(language.label)
+                .accessibilityValue(accessibilityState(selected: selection == language))
+                .accessibilityAddTraits(selection == language ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(DeckTheme.panelRaised)
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(DeckTheme.border))
+    }
+
+    private func accessibilityState(selected: Bool) -> String {
+        if selection == .simplifiedChinese {
+            return selected ? "已选择" : "未选择"
+        }
+        return selected ? "Selected" : "Not selected"
+    }
+}

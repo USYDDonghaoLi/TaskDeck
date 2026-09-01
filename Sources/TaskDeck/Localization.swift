@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import WidgetKit
 
 enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     case simplifiedChinese = "zh-Hans"
@@ -22,6 +23,7 @@ final class LanguageStore: ObservableObject {
             defaults.set(current.rawValue, forKey: Self.defaultsKey)
             if syncsSharedDefaults {
                 TaskDeckShared.storeLanguage(current)
+                WidgetCenter.shared.reloadTimelines(ofKind: TaskDeckShared.widgetKind)
             }
         }
     }
