@@ -1,0 +1,7 @@
+# Copy to scripts/privacy_denylist.txt and add one private value per line.
+# The real denylist is ignored by Git. Matching values are never printed by
+# the audit script, so this file can contain names, emails, or task fragments.
+
+your-private-email@example.com
+your-macOS-home-folder-name
+a-unique-fragment-from-a-private-task

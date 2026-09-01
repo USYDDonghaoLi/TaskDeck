@@ -6,6 +6,7 @@ struct LogicCheck {
     static func main() throws {
         try checkLegacyTaskMigration()
         try checkLegacyFocusMigration()
+        try checkPreviousAppGroupDatabaseMigration()
         try checkSharedStorageMigration()
         try checkCorruptDatabaseProtection()
         try checkTaskLifecycleAndBackups()
@@ -156,6 +157,78 @@ struct LogicCheck {
         try TaskDatabase(url: databaseURL).replaceTasks([], reason: "delete-all-check")
         let reopenedAfterDeleteAll = TaskStore(databaseURL: databaseURL, legacyTaskURL: legacyURL)
         precondition(reopenedAfterDeleteAll.tasks.isEmpty)
+    }
+
+    @MainActor
+    private static func checkPreviousAppGroupDatabaseMigration() throws {
+        let root = temporaryRoot("TaskDeckPreviousAppGroupMigration")
+        let oldDatabaseURL = root.appendingPathComponent("OldGroup/TaskDeck/taskdeck.sqlite3")
+        let newDatabaseURL = root.appendingPathComponent("NewGroup/TaskDeck/taskdeck.sqlite3")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let base = Date(timeIntervalSince1970: 1_788_500_000)
+        let task = TaskItem(
+            direction: "正式发布",
+            title: "从旧 App Group 保留任务",
+            estimatedMinutes: 35,
+            priority: .important,
+            createdAt: base
+        )
+        let session = FocusSession(
+            taskID: task.id,
+            taskTitle: task.title,
+            direction: task.direction,
+            startedAt: base,
+            endedAt: base.addingTimeInterval(900),
+            durationSeconds: 900
+        )
+        let active = ActiveFocus(
+            taskID: task.id,
+            taskTitle: task.title,
+            direction: task.direction,
+            initiatedAt: base.addingTimeInterval(1_000),
+            estimatedMinutes: 35,
+            runningSince: nil,
+            accumulatedSeconds: 120
+        )
+        let oldDatabase = try TaskDatabase(url: oldDatabaseURL)
+        try oldDatabase.replaceAll(
+            tasks: [task],
+            sessions: [session],
+            active: active,
+            reason: "prepare-previous-group"
+        )
+        let oldBytes = try Data(contentsOf: oldDatabaseURL)
+
+        let migrated = try TaskDeckShared.taskDatabase(
+            at: newDatabaseURL,
+            legacyDatabaseURL: oldDatabaseURL
+        )
+        let migratedTasks = try migrated.loadTasks()
+        let migratedSessions = try migrated.loadFocusSessions()
+        let migratedActive = try migrated.loadActiveFocus()
+        precondition(migratedTasks == [task])
+        precondition(migratedSessions == [session])
+        precondition(migratedActive == active)
+        let oldBytesAfterMigration = try Data(contentsOf: oldDatabaseURL)
+        precondition(oldBytesAfterMigration == oldBytes)
+
+        let preservedDatabaseURL = newDatabaseURL.deletingLastPathComponent()
+            .appendingPathComponent("Backups/Legacy/taskdeck-before-app-group-migration.sqlite3")
+        let preservedBytes = try Data(contentsOf: preservedDatabaseURL)
+        precondition(preservedBytes == oldBytes)
+
+        try migrated.replaceAll(tasks: [], sessions: [], active: nil, reason: "clear-after-group-migration")
+        let reopened = try TaskDeckShared.taskDatabase(
+            at: newDatabaseURL,
+            legacyDatabaseURL: oldDatabaseURL
+        )
+        let reopenedTasks = try reopened.loadTasks()
+        let reopenedSessions = try reopened.loadFocusSessions()
+        let reopenedActive = try reopened.loadActiveFocus()
+        precondition(reopenedTasks.isEmpty)
+        precondition(reopenedSessions.isEmpty)
+        precondition(reopenedActive == nil)
     }
 
     @MainActor

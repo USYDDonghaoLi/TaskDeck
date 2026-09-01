@@ -22,6 +22,8 @@ TaskDeck 是一个本地优先、极客风格的原生 macOS TODO 与专注管�
 - 每次修改前自动备份，并保留最近 30 份可恢复数据库
 - 通过设置窗口导入或导出完整 JSON 归档
 - 在设置窗口切换简体中文与英文，语言偏好会自动保存
+- 支持 Hardened Runtime、Universal Binary、Developer ID、Apple 公证和 DMG 公开发布流水线
+- 发布前自动检查任务数据、JSON、证书、邮箱和本机路径是否被误打包
 
 ## 隐私与数据
 
@@ -41,6 +43,8 @@ TaskDeck 不会上传任务内容。1.5 起，任务、专注记录和运行中�
 ```
 
 升级应用不会删除已有任务。1.5 首次启动会优先读取 1.4 的共享 `tasks.json`，再迁移专注 JSON；原文件不会被移动、覆盖或删除。导入 JSON 前也会先备份当前数据库。
+
+1.6 又增加了旧开发 App Group 到正式发布 App Group 的只读 SQLite 迁移：正式版首次启动会复制任务、专注历史和运行中计时，旧数据库原样保留。完整隐私声明见 [PRIVACY.md](PRIVACY.md)。
 
 ## 系统要求
 
@@ -66,6 +70,17 @@ zsh scripts/package_app.sh
 
 项目已包含独立 Widget Target、嵌入阶段、App Sandbox、App Group 和 App Intents 配置。以后提交 Mac App Store 时也应从该 Xcode 工程 Archive。
 
+### 官网公开发布
+
+```bash
+cp scripts/release.env.example scripts/release.env
+cp scripts/privacy_denylist.txt.example scripts/privacy_denylist.txt
+zsh scripts/check_release_readiness.sh
+zsh scripts/release_taskdeck.sh
+```
+
+公开发布流水线会构建 arm64 + x86_64 Universal 应用，执行 Developer ID 导出、两层 Apple 公证、票据附加、Gatekeeper 检查、隐私审计和 SHA-256 生成。详细步骤见 [官网直发指南](docs/PUBLIC_RELEASE.md)。
+
 ## 使用
 
 1. 解压 `TaskDeck-macOS.zip`，将 `TaskDeck.app` 拖入“应用程序”。
@@ -90,6 +105,6 @@ outputs/            使用说明、更新说明和示例报告
 
 ## 版本
 
-当前版本：TaskDeck 1.5.0。
+当前版本：TaskDeck 1.6.0（Build 7）。
 
 这是一个个人 Vibe Coding 项目，代码库默认保持私有；如果将来希望作为开源作品展示，可以在清理签名、隐私与发布配置后再改为公开。

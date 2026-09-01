@@ -5,3 +5,8 @@ work/
 outputs/.DS_Store
 outputs/TaskDeck.app/
 outputs/TaskDeck-macOS.zip
+.release/
+outputs/releases/
+scripts/release.env
+scripts/privacy_denylist.txt
+*.xcarchive

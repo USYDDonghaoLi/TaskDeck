@@ -6,7 +6,7 @@
     <true/>
     <key>com.apple.security.application-groups</key>
     <array>
-        <string>group.local.taskdeck.shared</string>
+        <string>$(TASKDECK_APP_GROUP_IDENTIFIER)</string>
     </array>
 </dict>
 </plist>

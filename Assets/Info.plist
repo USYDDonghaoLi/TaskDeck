@@ -11,7 +11,9 @@
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>local.taskdeck.macos</string>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>TaskDeckAppGroupIdentifier</key>
+    <string>$(TASKDECK_APP_GROUP_IDENTIFIER)</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -19,14 +21,14 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.5.0</string>
+    <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
-    <string>6</string>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
             <key>CFBundleURLName</key>
-            <string>local.taskdeck.macos.navigation</string>
+            <string>$(PRODUCT_BUNDLE_IDENTIFIER).navigation</string>
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>taskdeck</string>
@@ -39,6 +41,8 @@
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 TaskDeck. All rights reserved.</string>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
 </dict>

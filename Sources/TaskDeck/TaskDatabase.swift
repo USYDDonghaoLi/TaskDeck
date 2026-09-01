@@ -14,19 +14,32 @@ final class TaskDatabase {
     let wasCreated: Bool
 
     private let fileManager: FileManager
+    private let isReadOnly: Bool
     private let backupLimit = 30
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
     init(
         url: URL,
         backupDirectory: URL? = nil,
+        readOnly: Bool = false,
         fileManager: FileManager = .default
     ) throws {
         self.url = url
         self.backupDirectory = backupDirectory
             ?? url.deletingLastPathComponent().appendingPathComponent("Backups/Database", isDirectory: true)
         self.fileManager = fileManager
+        isReadOnly = readOnly
         wasCreated = !fileManager.fileExists(atPath: url.path)
+
+        if readOnly {
+            guard !wasCreated else {
+                throw TaskDatabaseError(operation: "Open SQLite", message: "Read-only database does not exist")
+            }
+            try withConnection { database in
+                try configure(database)
+            }
+            return
+        }
 
         try fileManager.createDirectory(
             at: url.deletingLastPathComponent(),
@@ -75,6 +88,7 @@ final class TaskDatabase {
     }
 
     func replaceTasks(_ tasks: [TaskItem], reason: String = "tasks") throws {
+        try requireWritable()
         try modify(reason: reason) { database in
             try syncTasks(tasks, in: database, replacingAll: false)
         }
@@ -85,7 +99,8 @@ final class TaskDatabase {
         reason: String,
         _ mutation: (inout [TaskItem]) throws -> Bool
     ) throws -> Bool {
-        try withConnection { database in
+        try requireWritable()
+        return try withConnection { database in
             try configure(database)
             try createBackup(from: database, reason: reason)
             try execute(database, sql: "BEGIN IMMEDIATE TRANSACTION")
@@ -132,6 +147,7 @@ final class TaskDatabase {
         active: ActiveFocus?,
         reason: String = "focus"
     ) throws {
+        try requireWritable()
         try modify(reason: reason) { database in
             try writeFocus(sessions: sessions, active: active, in: database)
         }
@@ -143,6 +159,7 @@ final class TaskDatabase {
         active: ActiveFocus?,
         reason: String = "json-import"
     ) throws {
+        try requireWritable()
         try modify(reason: reason) { database in
             try syncTasks(tasks, in: database, replacingAll: true)
             try writeFocus(sessions: sessions, active: active, in: database)
@@ -150,6 +167,7 @@ final class TaskDatabase {
     }
 
     private func modify(reason: String, changes: (OpaquePointer) throws -> Void) throws {
+        try requireWritable()
         try withConnection { database in
             try configure(database)
             try createBackup(from: database, reason: reason)
@@ -166,7 +184,9 @@ final class TaskDatabase {
 
     private func withConnection<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
         var database: OpaquePointer?
-        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
+        let flags = isReadOnly
+            ? SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX
+            : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
         guard sqlite3_open_v2(url.path, &database, flags, nil) == SQLITE_OK, let database else {
             let message = database.map { String(cString: sqlite3_errmsg($0)) } ?? "Could not open database"
             if let database { sqlite3_close(database) }
@@ -179,8 +199,16 @@ final class TaskDatabase {
 
     private func configure(_ database: OpaquePointer) throws {
         try execute(database, sql: "PRAGMA foreign_keys = ON")
-        try execute(database, sql: "PRAGMA journal_mode = DELETE")
-        try execute(database, sql: "PRAGMA synchronous = FULL")
+        if !isReadOnly {
+            try execute(database, sql: "PRAGMA journal_mode = DELETE")
+            try execute(database, sql: "PRAGMA synchronous = FULL")
+        }
+    }
+
+    private func requireWritable() throws {
+        guard !isReadOnly else {
+            throw TaskDatabaseError(operation: "Write SQLite", message: "Database was opened read-only")
+        }
     }
 
     private func createSchema(_ database: OpaquePointer) throws {

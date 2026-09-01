@@ -1,13 +1,23 @@
 import Foundation
 
 enum TaskDeckShared {
-    static let appGroupIdentifier = "group.local.taskdeck.shared"
+    static let developmentAppGroupIdentifier = "group.local.taskdeck.shared"
+    static var appGroupIdentifier: String {
+        guard
+            let configured = Bundle.main.object(forInfoDictionaryKey: "TaskDeckAppGroupIdentifier") as? String,
+            !configured.isEmpty,
+            !configured.contains("$(")
+        else { return developmentAppGroupIdentifier }
+        return configured
+    }
     static let widgetKind = "local.taskdeck.macos.widget.today"
     static let changeNotification = Notification.Name("local.taskdeck.tasks.changed")
     static let relativeDatabasePath = "TaskDeck/taskdeck.sqlite3"
     static let legacyRelativeTaskPath = "TaskDeck/tasks.json"
     private static let taskMigrationKey = "legacy_tasks_to_sqlite_v1"
     private static let focusMigrationKey = "legacy_focus_to_sqlite_v1"
+    private static let sharedDatabaseMigrationKey = "previous_app_group_sqlite_v1"
+    private static let legacyAppGroupIdentifiers = [developmentAppGroupIdentifier]
 
     static func groupRoot(fileManager: FileManager = .default) -> URL {
         if let container = fileManager.containerURL(
@@ -22,6 +32,21 @@ enum TaskDeckShared {
         return fileManager.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Group Containers", isDirectory: true)
             .appendingPathComponent(appGroupIdentifier, isDirectory: true)
+    }
+
+    static func groupRoot(
+        for identifier: String,
+        fileManager: FileManager = .default
+    ) -> URL {
+        if identifier == appGroupIdentifier,
+           let container = fileManager.containerURL(
+               forSecurityApplicationGroupIdentifier: identifier
+           ) {
+            return container
+        }
+        return fileManager.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Group Containers", isDirectory: true)
+            .appendingPathComponent(identifier, isDirectory: true)
     }
 
     static func databaseURL(groupRoot: URL? = nil) -> URL {
@@ -40,10 +65,16 @@ enum TaskDeckShared {
     static func taskDatabase(
         at databaseURL: URL? = nil,
         legacyTaskURL: URL? = nil,
+        legacyDatabaseURL: URL? = nil,
         fileManager: FileManager = .default
     ) throws -> TaskDatabase {
         let database = try TaskDatabase(url: databaseURL ?? self.databaseURL(), fileManager: fileManager)
-        if databaseURL == nil || legacyTaskURL != nil {
+        if databaseURL == nil || legacyTaskURL != nil || legacyDatabaseURL != nil {
+            try migratePreviousSharedDatabaseIfNeeded(
+                into: database,
+                explicitLegacyURL: legacyDatabaseURL,
+                fileManager: fileManager
+            )
             try migrateLegacyTasksIfNeeded(
                 into: database,
                 explicitLegacyURL: legacyTaskURL,
@@ -150,8 +181,16 @@ enum TaskDeckShared {
     }
 
     static func storedLanguage() -> AppLanguage {
-        let raw = UserDefaults(suiteName: appGroupIdentifier)?
+        let current = UserDefaults(suiteName: appGroupIdentifier)?
             .string(forKey: LanguageStore.defaultsKey)
+        let legacy = legacyAppGroupIdentifiers
+            .filter { $0 != appGroupIdentifier }
+            .lazy
+            .compactMap {
+                UserDefaults(suiteName: $0)?.string(forKey: LanguageStore.defaultsKey)
+            }
+            .first
+        let raw = current ?? legacy
         return raw.flatMap(AppLanguage.init(rawValue:)) ?? .simplifiedChinese
     }
 
@@ -175,11 +214,15 @@ enum TaskDeckShared {
         if let explicitLegacyURL {
             candidates = [explicitLegacyURL]
         } else {
-            candidates = [
-                legacyTaskFileURL(),
-                legacyApplicationSupportDirectory(fileManager: fileManager)
-                    .appendingPathComponent("tasks.json")
-            ]
+            candidates = [legacyTaskFileURL()]
+                + legacyAppGroupIdentifiers
+                    .filter { $0 != appGroupIdentifier }
+                    .map {
+                        groupRoot(for: $0, fileManager: fileManager)
+                            .appendingPathComponent(legacyRelativeTaskPath)
+                    }
+                + [legacyApplicationSupportDirectory(fileManager: fileManager)
+                    .appendingPathComponent("tasks.json")]
         }
 
         guard let source = candidates.first(where: { fileManager.fileExists(atPath: $0.path) }) else {
@@ -191,6 +234,60 @@ enum TaskDeckShared {
         try preserveLegacyFile(source, as: "tasks-before-sqlite.json", database: database)
         try database.replaceTasks(tasks, reason: "task-json-migration")
         try database.markMigration(taskMigrationKey)
+    }
+
+    private static func migratePreviousSharedDatabaseIfNeeded(
+        into database: TaskDatabase,
+        explicitLegacyURL: URL?,
+        fileManager: FileManager
+    ) throws {
+        guard !(try database.hasMigrationMarker(sharedDatabaseMigrationKey)) else { return }
+        let taskCount = try database.taskCount()
+        let hasFocusData = try database.hasFocusData()
+        if taskCount > 0 || hasFocusData {
+            try database.markMigration(sharedDatabaseMigrationKey)
+            return
+        }
+
+        let candidates: [URL]
+        if let explicitLegacyURL {
+            candidates = [explicitLegacyURL]
+        } else {
+            candidates = legacyAppGroupIdentifiers
+                .filter { $0 != appGroupIdentifier }
+                .map {
+                    groupRoot(for: $0, fileManager: fileManager)
+                        .appendingPathComponent(relativeDatabasePath)
+                }
+        }
+        let target = database.url.standardizedFileURL
+        guard let source = candidates.first(where: {
+            $0.standardizedFileURL != target && fileManager.fileExists(atPath: $0.path)
+        }) else {
+            try database.markMigration(sharedDatabaseMigrationKey)
+            return
+        }
+
+        try preserveLegacyFile(
+            source,
+            as: "taskdeck-before-app-group-migration.sqlite3",
+            database: database,
+            fileManager: fileManager
+        )
+        let legacyDatabase = try TaskDatabase(
+            url: source,
+            readOnly: true,
+            fileManager: fileManager
+        )
+        try database.replaceAll(
+            tasks: legacyDatabase.loadTasks(),
+            sessions: legacyDatabase.loadFocusSessions(),
+            active: legacyDatabase.loadActiveFocus(),
+            reason: "app-group-database-migration"
+        )
+        try database.markMigration(sharedDatabaseMigrationKey)
+        try database.markMigration(taskMigrationKey)
+        try database.markMigration(focusMigrationKey)
     }
 
     private static func preserveLegacyFile(
