@@ -2,6 +2,16 @@
 
 All notable TaskDeck changes are recorded here. Version numbers follow semantic versioning, while `CFBundleVersion` uses a monotonically increasing integer.
 
+## 1.8.0 (Build 9) - Precision Workflow
+
+- Added persistent, checkable subtasks backed by the existing relational SQLite subtask table.
+- Added subtask creation and editing in the task composer, inline completion/deletion on task cards, and recurring-task subtask templates.
+- Added global search across task names, directions, notes, and subtask titles.
+- Added compound priority and date filters for overdue, today, upcoming, and unscheduled work.
+- Added a Menu Bar Extra for creating a task without opening the main window.
+- Added app commands for new task (`⌘N`), global search (`⌘F`), clear filters (`⌘⌥F`), and desktop board (`⌘⇧D`).
+- Upgraded JSON archives to schema v4 while retaining backward-compatible imports.
+
 ## 1.7.0 (Build 8) - Safety & Recovery
 
 - Added a task Trash with one-click undo, restore, permanent deletion, and empty-trash controls.

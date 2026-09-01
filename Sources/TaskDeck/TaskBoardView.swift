@@ -5,10 +5,21 @@ struct TaskBoardView: View {
     @EnvironmentObject private var language: LanguageStore
     let filter: TaskFilter
     let direction: String?
+    let searchText: String
+    let priorityFilter: TaskPriorityFilter
+    let dateFilter: TaskDateFilter
     let highlightedTaskID: UUID?
     let onEdit: (TaskItem) -> Void
 
-    private var tasks: [TaskItem] { store.tasks(for: filter, direction: direction) }
+    private var tasks: [TaskItem] {
+        store.tasks(
+            for: filter,
+            direction: direction,
+            searchText: searchText,
+            priorityFilter: priorityFilter,
+            dateFilter: dateFilter
+        )
+    }
 
     private var groupedTasks: [(String, [TaskItem])] {
         Dictionary(grouping: tasks, by: \.normalizedDirection)
@@ -184,12 +195,51 @@ private struct TaskCard: View {
                         .lineLimit(2)
                 }
 
+
+                if !task.subtasks.isEmpty {
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(task.subtasks) { subtask in
+                            HStack(spacing: 7) {
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.15)) {
+                                        store.toggleSubtask(taskID: task.id, subtaskID: subtask.id)
+                                    }
+                                } label: {
+                                    Image(systemName: subtask.isCompleted ? "checkmark.square.fill" : "square")
+                                        .foregroundStyle(subtask.isCompleted ? DeckTheme.lime : DeckTheme.cyan.opacity(0.75))
+                                }
+                                .buttonStyle(.plain)
+                                Text(subtask.title)
+                                    .font(.system(size: 8, weight: .medium))
+                                    .foregroundStyle(subtask.isCompleted ? DeckTheme.muted : DeckTheme.text)
+                                    .strikethrough(subtask.isCompleted)
+                                    .lineLimit(1)
+                                Spacer(minLength: 4)
+                                Button {
+                                    store.deleteSubtask(taskID: task.id, subtaskID: subtask.id)
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 7, weight: .bold))
+                                        .foregroundStyle(DeckTheme.muted.opacity(0.7))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.leading, 2)
+                    .padding(.vertical, 2)
+                }
+
                 HStack(spacing: 12) {
                     if task.priority != .normal {
                         Label(task.priority.title(in: language.current), systemImage: task.priority.symbol)
                             .foregroundStyle(priorityColor)
                     }
                     Label(durationText, systemImage: "timer")
+                    if !task.subtasks.isEmpty {
+                        Label("\(task.completedSubtaskCount)/\(task.subtasks.count)", systemImage: "checklist")
+                            .foregroundStyle(DeckTheme.cyan)
+                    }
                     if focus.seconds(for: task.id) > 0 {
                         Label(actualFocusText, systemImage: "waveform.path.ecg")
                             .foregroundStyle(DeckTheme.cyan)

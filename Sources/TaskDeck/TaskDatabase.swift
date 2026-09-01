@@ -398,6 +398,10 @@ final class TaskDatabase {
         guard result == SQLITE_DONE else {
             throw TaskDatabaseError(operation: "Read SQLite", message: String(cString: sqlite3_errmsg(database)))
         }
+        let subtasks = try readSubtasks(database)
+        for index in tasks.indices {
+            tasks[index].subtasks = subtasks[tasks[index].id] ?? []
+        }
         return tasks
     }
 
@@ -456,6 +460,58 @@ final class TaskDatabase {
             try bind(task.generatedNextTaskID?.uuidString, to: statement, at: 12, database: database)
             bind(task.deletedAt, to: statement, at: 13)
             try stepDone(database, statement: statement)
+        }
+        try syncSubtasks(for: tasks, in: database)
+    }
+
+    private func readSubtasks(_ database: OpaquePointer) throws -> [UUID: [Subtask]] {
+        let statement = try prepare(database, sql: """
+        SELECT id, task_id, title, position, created_at, completed_at
+        FROM subtasks ORDER BY task_id, position, created_at
+        """)
+        defer { sqlite3_finalize(statement) }
+        var grouped: [UUID: [Subtask]] = [:]
+        var result = sqlite3_step(statement)
+        while result == SQLITE_ROW {
+            guard
+                let id = UUID(uuidString: text(statement, 0)),
+                let taskID = UUID(uuidString: text(statement, 1))
+            else {
+                throw TaskDatabaseError(operation: "Read SQLite", message: "A subtask has an invalid ID")
+            }
+            grouped[taskID, default: []].append(Subtask(
+                id: id,
+                title: text(statement, 2),
+                position: Int(sqlite3_column_int(statement, 3)),
+                createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4)),
+                completedAt: date(statement, 5)
+            ))
+            result = sqlite3_step(statement)
+        }
+        guard result == SQLITE_DONE else {
+            throw TaskDatabaseError(operation: "Read SQLite", message: String(cString: sqlite3_errmsg(database)))
+        }
+        return grouped
+    }
+
+    private func syncSubtasks(for tasks: [TaskItem], in database: OpaquePointer) throws {
+        try execute(database, sql: "DELETE FROM subtasks")
+        let sql = """
+        INSERT INTO subtasks (id, task_id, title, position, created_at, completed_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """
+        for task in tasks {
+            for (position, subtask) in task.subtasks.enumerated() {
+                let statement = try prepare(database, sql: sql)
+                defer { sqlite3_finalize(statement) }
+                try bind(subtask.id.uuidString, to: statement, at: 1, database: database)
+                try bind(task.id.uuidString, to: statement, at: 2, database: database)
+                try bind(subtask.title, to: statement, at: 3, database: database)
+                sqlite3_bind_int(statement, 4, Int32(position))
+                sqlite3_bind_double(statement, 5, subtask.createdAt.timeIntervalSince1970)
+                bind(subtask.completedAt, to: statement, at: 6)
+                try stepDone(database, statement: statement)
+            }
         }
     }
 

@@ -1,5 +1,29 @@
 import Foundation
 
+struct Subtask: Identifiable, Codable, Equatable, Sendable {
+    let id: UUID
+    var title: String
+    var position: Int
+    let createdAt: Date
+    var completedAt: Date?
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        position: Int = 0,
+        createdAt: Date = Date(),
+        completedAt: Date? = nil
+    ) {
+        self.id = id
+        self.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.position = max(0, position)
+        self.createdAt = createdAt
+        self.completedAt = completedAt
+    }
+
+    var isCompleted: Bool { completedAt != nil }
+}
+
 enum TaskPriority: String, Codable, CaseIterable, Identifiable, Sendable {
     case normal
     case important
@@ -76,6 +100,7 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     var completedAt: Date?
     var generatedNextTaskID: UUID?
     var deletedAt: Date?
+    var subtasks: [Subtask]
 
     init(
         id: UUID = UUID(),
@@ -90,7 +115,8 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         createdAt: Date = Date(),
         completedAt: Date? = nil,
         generatedNextTaskID: UUID? = nil,
-        deletedAt: Date? = nil
+        deletedAt: Date? = nil,
+        subtasks: [Subtask] = []
     ) {
         self.id = id
         self.direction = direction.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -105,10 +131,12 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.completedAt = completedAt
         self.generatedNextTaskID = generatedNextTaskID
         self.deletedAt = deletedAt
+        self.subtasks = subtasks.sorted { $0.position < $1.position }
     }
 
     var isCompleted: Bool { completedAt != nil }
     var isDeleted: Bool { deletedAt != nil }
+    var completedSubtaskCount: Int { subtasks.filter(\.isCompleted).count }
 
     var normalizedDirection: String {
         direction.isEmpty ? "未分类" : direction
@@ -132,6 +160,7 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         case completedAt
         case generatedNextTaskID
         case deletedAt
+        case subtasks
     }
 
     init(from decoder: Decoder) throws {
@@ -154,6 +183,48 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
         generatedNextTaskID = try container.decodeIfPresent(UUID.self, forKey: .generatedNextTaskID)
         deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        subtasks = (try container.decodeIfPresent([Subtask].self, forKey: .subtasks) ?? [])
+            .sorted { $0.position < $1.position }
+    }
+}
+
+enum TaskPriorityFilter: String, CaseIterable, Identifiable, Sendable {
+    case all
+    case normal
+    case important
+    case urgent
+
+    var id: String { rawValue }
+
+    func title(in language: AppLanguage) -> String {
+        switch self {
+        case .all: return language == .simplifiedChinese ? "全部优先级" : "All Priorities"
+        case .normal: return TaskPriority.normal.title(in: language)
+        case .important: return TaskPriority.important.title(in: language)
+        case .urgent: return TaskPriority.urgent.title(in: language)
+        }
+    }
+
+    var priority: TaskPriority? { self == .all ? nil : TaskPriority(rawValue: rawValue) }
+}
+
+enum TaskDateFilter: String, CaseIterable, Identifiable, Sendable {
+    case all
+    case overdue
+    case today
+    case upcoming
+    case unscheduled
+
+    var id: String { rawValue }
+
+    func title(in language: AppLanguage) -> String {
+        switch self {
+        case .all: return language == .simplifiedChinese ? "全部日期" : "All Dates"
+        case .overdue: return language == .simplifiedChinese ? "已逾期" : "Overdue"
+        case .today: return language == .simplifiedChinese ? "今天" : "Today"
+        case .upcoming: return language == .simplifiedChinese ? "未来计划" : "Upcoming"
+        case .unscheduled: return language == .simplifiedChinese ? "未安排" : "Unscheduled"
+        }
     }
 }
 

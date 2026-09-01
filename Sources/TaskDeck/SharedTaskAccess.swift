@@ -122,7 +122,10 @@ enum TaskDeckShared {
                         priority: completed.priority,
                         dueAt: nextDueAt,
                         reminderEnabled: completed.reminderEnabled,
-                        recurrence: completed.recurrence
+                        recurrence: completed.recurrence,
+                        subtasks: completed.subtasks.enumerated().map { position, subtask in
+                            Subtask(title: subtask.title, position: position)
+                        }
                     )
                     tasks[index].generatedNextTaskID = nextTask.id
                     tasks.append(nextTask)

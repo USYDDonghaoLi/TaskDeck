@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+extension Notification.Name {
+    static let taskDeckNewTask = Notification.Name("TaskDeck.command.newTask")
+    static let taskDeckFocusSearch = Notification.Name("TaskDeck.command.focusSearch")
+    static let taskDeckClearFilters = Notification.Name("TaskDeck.command.clearFilters")
+    static let taskDeckOpenDesktop = Notification.Name("TaskDeck.command.openDesktop")
+}
+
 struct DashboardView: View {
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var notifications: NotificationManager
@@ -13,6 +20,10 @@ struct DashboardView: View {
     @State private var showingComposer = false
     @State private var editingTask: TaskItem?
     @State private var highlightedTaskID: UUID?
+    @State private var searchText = ""
+    @State private var priorityFilter: TaskPriorityFilter = .all
+    @State private var dateFilter: TaskDateFilter = .all
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         ZStack {
@@ -39,6 +50,13 @@ struct DashboardView: View {
                         showDesktop: { openWindow(id: "desktop") }
                     )
 
+                    SearchFilterBar(
+                        searchText: $searchText,
+                        priorityFilter: $priorityFilter,
+                        dateFilter: $dateFilter,
+                        searchFocus: $searchFocused
+                    )
+
                     Rectangle()
                         .fill(DeckTheme.border)
                         .frame(height: 1)
@@ -49,6 +67,9 @@ struct DashboardView: View {
                         TaskBoardView(
                             filter: filter,
                             direction: selectedDirection,
+                            searchText: searchText,
+                            priorityFilter: priorityFilter,
+                            dateFilter: dateFilter,
                             highlightedTaskID: highlightedTaskID,
                             onEdit: presentEditor
                         )
@@ -120,6 +141,15 @@ struct DashboardView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             store.refreshFromDisk()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .taskDeckNewTask)) { _ in presentNewTask() }
+        .onReceive(NotificationCenter.default.publisher(for: .taskDeckFocusSearch)) { _ in searchFocused = true }
+        .onReceive(NotificationCenter.default.publisher(for: .taskDeckClearFilters)) { _ in
+            searchText = ""
+            priorityFilter = .all
+            dateFilter = .all
+            selectedDirection = nil
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .taskDeckOpenDesktop)) { _ in openWindow(id: "desktop") }
     }
 
     private func presentNewTask() {
@@ -169,6 +199,75 @@ struct DashboardView: View {
             return "The shared database could not be refreshed. Existing on-screen data was retained."
         }
         return error
+    }
+}
+
+private struct SearchFilterBar: View {
+    @EnvironmentObject private var language: LanguageStore
+    @Binding var searchText: String
+    @Binding var priorityFilter: TaskPriorityFilter
+    @Binding var dateFilter: TaskDateFilter
+    let searchFocus: FocusState<Bool>.Binding
+
+    private var isFiltering: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || priorityFilter != .all
+            || dateFilter != .all
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(DeckTheme.cyan)
+                TextField(language.text("全局搜索任务、方向、备注或子任务", "Search tasks, directions, notes, or subtasks"), text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 10, weight: .medium))
+                    .focused(searchFocus)
+                Text("⌘F")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(DeckTheme.muted)
+            }
+            .padding(.horizontal, 11)
+            .frame(maxWidth: 410)
+            .frame(height: 32)
+            .background(DeckTheme.panelRaised)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(searchFocus.wrappedValue ? DeckTheme.cyan.opacity(0.7) : DeckTheme.border))
+
+            Picker(language.text("优先级", "Priority"), selection: $priorityFilter) {
+                ForEach(TaskPriorityFilter.allCases) { item in
+                    Text(item.title(in: language.current)).tag(item)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 140)
+
+            Picker(language.text("日期", "Date"), selection: $dateFilter) {
+                ForEach(TaskDateFilter.allCases) { item in
+                    Text(item.title(in: language.current)).tag(item)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 130)
+
+            if isFiltering {
+                Button {
+                    searchText = ""
+                    priorityFilter = .all
+                    dateFilter = .all
+                } label: {
+                    Label(language.text("清除", "Clear"), systemImage: "xmark.circle.fill")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(DeckTheme.muted)
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24)
+        .frame(height: 48)
+        .background(DeckTheme.void.opacity(0.72))
     }
 }
 

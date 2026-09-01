@@ -19,6 +19,8 @@ struct TaskComposerView: View {
     @State private var dueAt: Date
     @State private var reminderEnabled: Bool
     @State private var recurrence: TaskRecurrence
+    @State private var subtasks: [Subtask]
+    @State private var newSubtaskTitle = ""
 
     init(editingTask: TaskItem? = nil) {
         self.editingTask = editingTask
@@ -31,6 +33,7 @@ struct TaskComposerView: View {
         _dueAt = State(initialValue: editingTask?.dueAt ?? Date().addingTimeInterval(3_600))
         _reminderEnabled = State(initialValue: editingTask?.reminderEnabled ?? false)
         _recurrence = State(initialValue: editingTask?.recurrence ?? .none)
+        _subtasks = State(initialValue: editingTask?.subtasks ?? [])
     }
 
     var body: some View {
@@ -50,6 +53,7 @@ struct TaskComposerView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         directionSection
                         descriptionSection
+                        subtaskSection
                         prioritySection
                         durationSection
                         schedulingSection
@@ -63,7 +67,7 @@ struct TaskComposerView: View {
             }
             .padding(26)
         }
-        .frame(width: 540, height: 720)
+        .frame(width: 560, height: 780)
         .foregroundStyle(DeckTheme.text)
         .fontDesign(.monospaced)
         .onChange(of: recurrence) { value in
@@ -161,7 +165,7 @@ struct TaskComposerView: View {
 
     private var prioritySection: some View {
         VStack(alignment: .leading, spacing: 9) {
-            FieldLabel(number: "03", text: language.text("优先级", "Priority"))
+            FieldLabel(number: "04", text: language.text("优先级", "Priority"))
             HStack(spacing: 7) {
                 ForEach(TaskPriority.allCases) { item in
                     Button { priority = item } label: {
@@ -179,9 +183,67 @@ struct TaskComposerView: View {
         }
     }
 
+    private var subtaskSection: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                FieldLabel(number: "03", text: language.text("子任务", "Subtasks"))
+                Spacer()
+                if !subtasks.isEmpty {
+                    Text("\(subtasks.filter(\.isCompleted).count)/\(subtasks.count)")
+                        .font(.system(size: 8, weight: .black))
+                        .foregroundStyle(DeckTheme.cyan)
+                }
+            }
+
+            ForEach($subtasks) { $subtask in
+                HStack(spacing: 9) {
+                    Button {
+                        subtask.completedAt = subtask.isCompleted ? nil : Date()
+                    } label: {
+                        Image(systemName: subtask.isCompleted ? "checkmark.square.fill" : "square")
+                            .foregroundStyle(subtask.isCompleted ? DeckTheme.lime : DeckTheme.cyan)
+                    }
+                    .buttonStyle(.plain)
+                    TextField(language.text("子任务描述", "Subtask description"), text: $subtask.title)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 10, weight: .medium))
+                        .strikethrough(subtask.isCompleted)
+                    Button {
+                        subtasks.removeAll { $0.id == subtask.id }
+                        normalizeSubtaskPositions()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .foregroundStyle(DeckTheme.muted)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 11)
+                .frame(height: 34)
+                .background(DeckTheme.panelRaised)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+            }
+
+            HStack(spacing: 8) {
+                TextField(language.text("添加一个可勾选的步骤", "Add a checkable step"), text: $newSubtaskTitle)
+                    .deckTextField()
+                    .onSubmit(addSubtaskDraft)
+                Button(action: addSubtaskDraft) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundStyle(DeckTheme.void)
+                        .frame(width: 34, height: 34)
+                        .background(DeckTheme.cyan)
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+                .disabled(newSubtaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+
     private var durationSection: some View {
         VStack(alignment: .leading, spacing: 9) {
-            FieldLabel(number: "04", text: language.text("预计时间", "Estimated Time"))
+            FieldLabel(number: "05", text: language.text("预计时间", "Estimated Time"))
             HStack(spacing: 7) {
                 ForEach(durationPresets, id: \.self) { minutes in
                     Button(durationLabel(minutes)) { estimatedMinutes = minutes }
@@ -203,7 +265,7 @@ struct TaskComposerView: View {
     private var schedulingSection: some View {
         VStack(alignment: .leading, spacing: 11) {
             Toggle(isOn: $hasDueDate) {
-                FieldLabel(number: "05", text: language.text("计划与重复", "Schedule & Repeat"))
+                FieldLabel(number: "06", text: language.text("计划与重复", "Schedule & Repeat"))
             }
             .toggleStyle(.switch)
 
@@ -309,6 +371,7 @@ struct TaskComposerView: View {
             task.dueAt = hasDueDate ? dueAt : nil
             task.reminderEnabled = reminderEnabled && hasDueDate
             task.recurrence = hasDueDate ? recurrence : .none
+            task.subtasks = subtasks
             savedTask = store.update(task)
         } else {
             savedTask = store.add(
@@ -319,12 +382,28 @@ struct TaskComposerView: View {
                 priority: priority,
                 dueAt: hasDueDate ? dueAt : nil,
                 reminderEnabled: reminderEnabled && hasDueDate,
-                recurrence: hasDueDate ? recurrence : .none
+                recurrence: hasDueDate ? recurrence : .none,
+                subtasks: subtasks
             )
         }
 
         if let savedTask { notifications.schedule(for: savedTask) }
         dismiss()
+    }
+
+    private func addSubtaskDraft() {
+        let cleanTitle = newSubtaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty else { return }
+        subtasks.append(Subtask(title: cleanTitle, position: subtasks.count))
+        newSubtaskTitle = ""
+    }
+
+    private func normalizeSubtaskPositions() {
+        subtasks = subtasks.enumerated().map { position, value in
+            var subtask = value
+            subtask.position = position
+            return subtask
+        }
     }
 }
 

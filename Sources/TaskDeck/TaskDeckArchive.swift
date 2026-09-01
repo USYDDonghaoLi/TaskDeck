@@ -8,7 +8,7 @@ struct TaskDeckArchive: Codable {
     let activeFocus: ActiveFocus?
 
     init(
-        schemaVersion: Int = 3,
+        schemaVersion: Int = 4,
         exportedAt: Date = Date(),
         tasks: [TaskItem],
         focusSessions: [FocusSession],

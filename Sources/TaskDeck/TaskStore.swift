@@ -76,9 +76,18 @@ final class TaskStore: ObservableObject {
         return Double(todayCompleted.count) / Double(todayTotalCount)
     }
 
-    func tasks(for filter: TaskFilter, direction: String? = nil) -> [TaskItem] {
+    func tasks(
+        for filter: TaskFilter,
+        direction: String? = nil,
+        searchText: String = "",
+        priorityFilter: TaskPriorityFilter = .all,
+        dateFilter: TaskDateFilter = .all
+    ) -> [TaskItem] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let base: [TaskItem]
-        switch filter {
+        if !query.isEmpty {
+            base = activeTasks
+        } else { switch filter {
         case .today:
             base = activeTasks.filter { task in
                 if let completedAt = task.completedAt {
@@ -91,10 +100,19 @@ final class TaskStore: ObservableObject {
             base = activeTasks.filter { !$0.isCompleted }
         case .completed:
             base = activeTasks.filter(\.isCompleted)
-        }
+        } }
 
         return base
-            .filter { direction == nil || $0.normalizedDirection == direction }
+            .filter { !query.isEmpty || direction == nil || $0.normalizedDirection == direction }
+            .filter { task in
+                guard !query.isEmpty else { return true }
+                return task.title.localizedCaseInsensitiveContains(query)
+                    || task.direction.localizedCaseInsensitiveContains(query)
+                    || task.notes.localizedCaseInsensitiveContains(query)
+                    || task.subtasks.contains { $0.title.localizedCaseInsensitiveContains(query) }
+            }
+            .filter { priorityFilter.priority == nil || $0.priority == priorityFilter.priority }
+            .filter { matchesDateFilter($0, filter: dateFilter) }
             .sorted(by: Self.taskSort)
     }
 
@@ -106,7 +124,8 @@ final class TaskStore: ObservableObject {
         priority: TaskPriority = .normal,
         dueAt: Date?,
         reminderEnabled: Bool,
-        recurrence: TaskRecurrence = .none
+        recurrence: TaskRecurrence = .none,
+        subtasks: [Subtask] = []
     ) -> TaskItem {
         let task = TaskItem(
             direction: direction,
@@ -116,7 +135,8 @@ final class TaskStore: ObservableObject {
             priority: priority,
             dueAt: dueAt,
             reminderEnabled: reminderEnabled,
-            recurrence: recurrence
+            recurrence: recurrence,
+            subtasks: normalizedSubtasks(subtasks)
         )
         _ = mutateTasks(reason: "task-add") { persistedTasks in
             persistedTasks.append(task)
@@ -134,6 +154,7 @@ final class TaskStore: ObservableObject {
         normalized.estimatedMinutes = max(5, task.estimatedMinutes)
         normalized.reminderEnabled = task.reminderEnabled && task.dueAt != nil
         normalized.recurrence = task.dueAt == nil ? .none : task.recurrence
+        normalized.subtasks = normalizedSubtasks(task.subtasks)
         let changed = mutateTasks(reason: "task-edit") { persistedTasks in
             guard let index = persistedTasks.firstIndex(where: { $0.id == normalized.id && !$0.isDeleted }) else {
                 return false
@@ -166,7 +187,10 @@ final class TaskStore: ObservableObject {
                         priority: completedTask.priority,
                         dueAt: nextDueAt,
                         reminderEnabled: completedTask.reminderEnabled,
-                        recurrence: completedTask.recurrence
+                        recurrence: completedTask.recurrence,
+                        subtasks: completedTask.subtasks.enumerated().map { position, subtask in
+                            Subtask(title: subtask.title, position: position)
+                        }
                     )
                     persistedTasks[index].generatedNextTaskID = nextTask.id
                     persistedTasks.append(nextTask)
@@ -202,6 +226,47 @@ final class TaskStore: ObservableObject {
             persistedTasks[index].deletedAt = Date()
             lastDeletedTask = persistedTasks[index]
             return true
+        }
+    }
+
+    @discardableResult
+    func addSubtask(to task: TaskItem, title: String) -> Subtask? {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty else { return nil }
+        var created: Subtask?
+        _ = mutateTasks(reason: "subtask-add") { persistedTasks in
+            guard let index = persistedTasks.firstIndex(where: { $0.id == task.id && !$0.isDeleted }) else {
+                return false
+            }
+            let subtask = Subtask(title: cleanTitle, position: persistedTasks[index].subtasks.count)
+            persistedTasks[index].subtasks.append(subtask)
+            created = subtask
+            return true
+        }
+        return created
+    }
+
+    func toggleSubtask(taskID: UUID, subtaskID: UUID) {
+        _ = mutateTasks(reason: "subtask-toggle") { persistedTasks in
+            guard
+                let taskIndex = persistedTasks.firstIndex(where: { $0.id == taskID && !$0.isDeleted }),
+                let subtaskIndex = persistedTasks[taskIndex].subtasks.firstIndex(where: { $0.id == subtaskID })
+            else { return false }
+            persistedTasks[taskIndex].subtasks[subtaskIndex].completedAt =
+                persistedTasks[taskIndex].subtasks[subtaskIndex].isCompleted ? nil : Date()
+            return true
+        }
+    }
+
+    func deleteSubtask(taskID: UUID, subtaskID: UUID) {
+        _ = mutateTasks(reason: "subtask-delete") { persistedTasks in
+            guard let taskIndex = persistedTasks.firstIndex(where: { $0.id == taskID && !$0.isDeleted }) else {
+                return false
+            }
+            let before = persistedTasks[taskIndex].subtasks.count
+            persistedTasks[taskIndex].subtasks.removeAll { $0.id == subtaskID }
+            persistedTasks[taskIndex].subtasks = normalizedSubtasks(persistedTasks[taskIndex].subtasks)
+            return persistedTasks[taskIndex].subtasks.count != before
         }
     }
 
@@ -386,6 +451,37 @@ final class TaskStore: ObservableObject {
         case (nil, _?): return false
         default: return lhs.createdAt > rhs.createdAt
         }
+    }
+
+    private func matchesDateFilter(_ task: TaskItem, filter: TaskDateFilter) -> Bool {
+        switch filter {
+        case .all:
+            return true
+        case .overdue:
+            guard let dueAt = task.dueAt else { return false }
+            return !task.isCompleted && dueAt < Date()
+        case .today:
+            guard let dueAt = task.dueAt else { return false }
+            return calendar.isDateInToday(dueAt)
+        case .upcoming:
+            guard let dueAt = task.dueAt else { return false }
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())) ?? Date()
+            return !task.isCompleted && dueAt >= tomorrow
+        case .unscheduled:
+            return task.dueAt == nil
+        }
+    }
+
+    private func normalizedSubtasks(_ subtasks: [Subtask]) -> [Subtask] {
+        subtasks
+            .filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .enumerated()
+            .map { position, value in
+                var subtask = value
+                subtask.title = value.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                subtask.position = position
+                return subtask
+            }
     }
 
     private static func interval(for period: ReportPeriod, reference: Date, calendar: Calendar) -> DateInterval {

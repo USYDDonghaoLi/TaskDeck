@@ -7,6 +7,7 @@ TaskDeck is a local-first, hacker-inspired native macOS app for task execution a
 ## Features
 
 - Create tasks with a direction, a precise action, and an estimated duration
+- Split work into individually checkable subtasks; recurring tasks receive a fresh incomplete copy
 - Use the visible pencil on a task card to edit its name, estimate, priority, notes, and schedule
 - Repeat tasks daily, on weekdays, weekly, or monthly
 - Postpone a task by one hour, until tomorrow, or until next Monday
@@ -22,6 +23,9 @@ TaskDeck is a local-first, hacker-inspired native macOS app for task execution a
 - Create a backup before every change and retain the latest 30 recoverable databases
 - Move tasks to Trash first, with immediate undo, later restoration, and explicit permanent deletion
 - Browse automatic backups, check integrity, and safely restore task and focus data in Settings
+- Search task names, directions, notes, and subtasks globally, then combine priority and date filters
+- Add tasks from the macOS menu bar without opening the main window first
+- Use `⌘N` for new task, `⌘F` for search, `⌘⌥F` to clear filters, and `⌘⇧D` for the desktop board
 - Import or export a complete JSON archive from the Settings window
 - Switch between Simplified Chinese and English in Settings, with the preference remembered locally
 - Support Hardened Runtime, Universal binaries, Developer ID, Apple notarization, and a public DMG release pipeline
@@ -46,7 +50,7 @@ TaskDeck does not upload task content. Starting in 1.5, tasks, focus history, an
 
 Upgrading does not delete existing tasks. On the first 1.5 launch, TaskDeck imports the 1.4 shared `tasks.json` first, then the focus JSON files. It never moves, overwrites, or deletes those originals. JSON import also backs up the current database before replacing data.
 
-Version 1.6 also adds a read-only SQLite migration from the development App Group to a registered production App Group. Tasks, focus history, and an active timer are copied on first launch while the old database remains byte-for-byte untouched. Version 1.7 moves deleted tasks to Trash and adds integrity-checked database restoration. Its migration only adds an optional column and does not delete existing tasks. See [PRIVACY.md](PRIVACY.md) for the complete privacy policy.
+Version 1.6 also adds a read-only SQLite migration from the development App Group to a registered production App Group. Tasks, focus history, and an active timer are copied on first launch while the old database remains byte-for-byte untouched. Version 1.7 moves deleted tasks to Trash and adds integrity-checked database restoration. Its migration only adds an optional column and does not delete existing tasks. Version 1.8 activates the already-reserved relational subtask table, so no destructive migration is required. See [PRIVACY.md](PRIVACY.md) for the complete privacy policy.
 
 ## Requirements
 
@@ -107,6 +111,6 @@ outputs/            User guides, release notes, and sample reports
 
 ## Version
 
-Current version: TaskDeck 1.7.0 (Build 8).
+Current version: TaskDeck 1.8.0 (Build 9).
 
 This is a personal vibe-coding project. The repository is private by default; it can be made public later after reviewing signing, privacy, and release configuration.

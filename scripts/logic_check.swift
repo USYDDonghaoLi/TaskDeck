@@ -13,6 +13,7 @@ struct LogicCheck {
         try checkTaskLifecycleAndBackups()
         try checkTrashUndoAndSafeRestore()
         try checkVersionOneDatabaseMigration()
+        try checkSubtasksSearchAndFilters()
         try checkSharedWriteCoordination()
         try checkFocusLifecycle()
         try checkArchiveRoundTrip()
@@ -417,6 +418,87 @@ struct LogicCheck {
     }
 
     @MainActor
+    private static func checkSubtasksSearchAndFilters() throws {
+        let root = temporaryRoot("TaskDeckSubtasksSearchFilters")
+        let databaseURL = root.appendingPathComponent("TaskDeck/taskdeck.sqlite3")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = TaskStore(databaseURL: databaseURL)
+
+        let overdue = store.add(
+            direction: "发布",
+            title: "完成 1.8 验收",
+            notes: "包含数据库和界面",
+            estimatedMinutes: 40,
+            priority: .urgent,
+            dueAt: Date().addingTimeInterval(-3_600),
+            reminderEnabled: false,
+            subtasks: [
+                Subtask(title: "验收 API 搜索", position: 0),
+                Subtask(title: "检查菜单栏", position: 1)
+            ]
+        )
+        let unscheduled = store.add(
+            direction: "学习",
+            title: "整理 SwiftUI 笔记",
+            estimatedMinutes: 25,
+            priority: .important,
+            dueAt: nil,
+            reminderEnabled: false
+        )
+        _ = store.add(
+            direction: "计划",
+            title: "准备下周迭代",
+            estimatedMinutes: 30,
+            dueAt: Date().addingTimeInterval(3 * 86_400),
+            reminderEnabled: false
+        )
+
+        precondition(store.tasks(for: .today, searchText: "API").map(\.id) == [overdue.id])
+        precondition(store.tasks(for: .inbox, priorityFilter: .urgent, dateFilter: .overdue).map(\.id) == [overdue.id])
+        precondition(store.tasks(for: .inbox, priorityFilter: .important, dateFilter: .unscheduled).map(\.id) == [unscheduled.id])
+        precondition(store.tasks(for: .inbox, dateFilter: .upcoming).count == 1)
+
+        let firstSubtaskID = overdue.subtasks[0].id
+        store.toggleSubtask(taskID: overdue.id, subtaskID: firstSubtaskID)
+        var persisted = TaskStore(databaseURL: databaseURL).tasks.first(where: { $0.id == overdue.id })
+        precondition(persisted?.subtasks.first?.isCompleted == true)
+        precondition(persisted?.completedSubtaskCount == 1)
+
+        _ = store.addSubtask(to: overdue, title: "  生成发布说明  ")
+        persisted = TaskStore(databaseURL: databaseURL).tasks.first(where: { $0.id == overdue.id })
+        precondition(persisted?.subtasks.last?.title == "生成发布说明")
+        if let lastID = persisted?.subtasks.last?.id {
+            store.deleteSubtask(taskID: overdue.id, subtaskID: lastID)
+        }
+        persisted = TaskStore(databaseURL: databaseURL).tasks.first(where: { $0.id == overdue.id })
+        precondition(persisted?.subtasks.count == 2)
+
+        let recurring = store.add(
+            direction: "例行",
+            title: "执行双步骤巡检",
+            estimatedMinutes: 20,
+            dueAt: Date().addingTimeInterval(3_600),
+            reminderEnabled: false,
+            recurrence: .daily,
+            subtasks: [Subtask(title: "步骤一", completedAt: Date()), Subtask(title: "步骤二")]
+        )
+        guard let next = store.toggle(recurring) else {
+            preconditionFailure("Expected a new recurring task")
+        }
+        precondition(next.subtasks.count == 2)
+        precondition(next.subtasks.allSatisfy { !$0.isCompleted })
+        precondition(Set(next.subtasks.map(\.id)).isDisjoint(with: Set(recurring.subtasks.map(\.id))))
+
+        let focus = FocusStore(databaseURL: databaseURL)
+        let archiveData = try store.exportArchive(focusStore: focus)
+        guard case let .archive(archive) = try TaskDeckArchiveCodec.decode(archiveData) else {
+            preconditionFailure("Expected TaskDeck archive")
+        }
+        precondition(archive.schemaVersion == 4)
+        precondition(archive.tasks.first(where: { $0.id == overdue.id })?.subtasks.count == 2)
+    }
+
+    @MainActor
     private static func checkFocusLifecycle() throws {
         let root = temporaryRoot("TaskDeckFocusLifecycle")
         let databaseURL = root.appendingPathComponent("TaskDeck/taskdeck.sqlite3")
@@ -503,7 +585,7 @@ struct LogicCheck {
         guard case let .archive(decoded) = try TaskDeckArchiveCodec.decode(archiveData) else {
             preconditionFailure("Expected a complete TaskDeck archive")
         }
-        precondition(decoded.schemaVersion == 3)
+        precondition(decoded.schemaVersion == 4)
         precondition(decoded.tasks.count == 1)
         precondition(decoded.focusSessions.count == 1)
 
