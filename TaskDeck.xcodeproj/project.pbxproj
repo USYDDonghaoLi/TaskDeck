@@ -34,6 +34,15 @@
 		210000000000000000000006 /* TaskDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000012 /* TaskDatabase.swift */; };
 		210000000000000000000007 /* TaskDeckArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000013 /* TaskDeckArchive.swift */; };
 		220000000000000000000001 /* TaskDeckWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 130000000000000000000002 /* TaskDeckWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		230000000000000000000001 /* TaskDeckTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000001 /* TaskDeckTests.swift */; };
+		230000000000000000000002 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000005 /* Localization.swift */; };
+		230000000000000000000003 /* TaskItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000D /* TaskItem.swift */; };
+		230000000000000000000004 /* FocusModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000010 /* FocusModels.swift */; };
+		230000000000000000000005 /* TaskDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000012 /* TaskDatabase.swift */; };
+		230000000000000000000006 /* TaskDeckArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000013 /* TaskDeckArchive.swift */; };
+		230000000000000000000007 /* SharedTaskAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000009 /* SharedTaskAccess.swift */; };
+		230000000000000000000008 /* TaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000E /* TaskStore.swift */; };
+		230000000000000000000009 /* FocusStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000004 /* FocusStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -87,11 +96,14 @@
 		120000000000000000000003 /* TaskDeckWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TaskDeckWidget.entitlements; sourceTree = "<group>"; };
 		130000000000000000000001 /* TaskDeck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TaskDeck.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		130000000000000000000002 /* TaskDeckWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TaskDeckWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		130000000000000000000003 /* TaskDeckTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TaskDeckTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		140000000000000000000001 /* TaskDeckTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDeckTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		500000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		500000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		500000000000000000000003 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -100,6 +112,7 @@
 			children = (
 				600000000000000000000002 /* Sources */,
 				600000000000000000000004 /* WidgetExtension */,
+				600000000000000000000007 /* Tests */,
 				600000000000000000000005 /* Assets */,
 				600000000000000000000006 /* Products */,
 			);
@@ -134,7 +147,9 @@
 		};
 		600000000000000000000004 /* WidgetExtension */ = {isa = PBXGroup; children = (110000000000000000000001 /* TaskDeckWidget.swift */, 110000000000000000000002 /* Info.plist */, ); path = WidgetExtension; sourceTree = "<group>"; };
 		600000000000000000000005 /* Assets */ = {isa = PBXGroup; children = (120000000000000000000001 /* Info.plist */, 120000000000000000000002 /* TaskDeck.entitlements */, 120000000000000000000003 /* TaskDeckWidget.entitlements */, ); path = Assets; sourceTree = "<group>"; };
-		600000000000000000000006 /* Products */ = {isa = PBXGroup; children = (130000000000000000000001 /* TaskDeck.app */, 130000000000000000000002 /* TaskDeckWidget.appex */, ); name = Products; sourceTree = "<group>"; };
+		600000000000000000000006 /* Products */ = {isa = PBXGroup; children = (130000000000000000000001 /* TaskDeck.app */, 130000000000000000000002 /* TaskDeckWidget.appex */, 130000000000000000000003 /* TaskDeckTests.xctest */, ); name = Products; sourceTree = "<group>"; };
+		600000000000000000000007 /* Tests */ = {isa = PBXGroup; children = (600000000000000000000008 /* TaskDeckTests */, ); path = Tests; sourceTree = "<group>"; };
+		600000000000000000000008 /* TaskDeckTests */ = {isa = PBXGroup; children = (140000000000000000000001 /* TaskDeckTests.swift */, ); path = TaskDeckTests; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -160,6 +175,17 @@
 			productReference = 130000000000000000000002 /* TaskDeckWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		A00000000000000000000004 /* TaskDeckTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 800000000000000000000004 /* Build configuration list for PBXNativeTarget "TaskDeckTests" */;
+			buildPhases = (700000000000000000000005 /* Sources */, 500000000000000000000003 /* Frameworks */, 700000000000000000000006 /* Resources */, );
+			buildRules = ();
+			dependencies = ();
+			name = TaskDeckTests;
+			productName = TaskDeckTests;
+			productReference = 130000000000000000000003 /* TaskDeckTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -172,6 +198,7 @@
 				TargetAttributes = {
 					A00000000000000000000002 = {CreatedOnToolsVersion = 15.4; SystemCapabilities = {com.apple.ApplicationGroups = {enabled = 1; }; }; };
 					A00000000000000000000003 = {CreatedOnToolsVersion = 15.4; SystemCapabilities = {com.apple.ApplicationGroups = {enabled = 1; }; com.apple.Sandbox = {enabled = 1; }; }; };
+					A00000000000000000000004 = {CreatedOnToolsVersion = 26.0; TestTargetID = A00000000000000000000002; };
 				};
 			};
 			buildConfigurationList = 800000000000000000000001 /* Build configuration list for PBXProject "TaskDeck" */;
@@ -183,13 +210,14 @@
 			productRefGroup = 600000000000000000000006 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (A00000000000000000000002 /* TaskDeck */, A00000000000000000000003 /* TaskDeckWidget */, );
+			targets = (A00000000000000000000002 /* TaskDeck */, A00000000000000000000003 /* TaskDeckWidget */, A00000000000000000000004 /* TaskDeckTests */, );
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		700000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		700000000000000000000004 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		700000000000000000000006 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -206,6 +234,7 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		700000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (210000000000000000000001, 210000000000000000000002, 210000000000000000000003, 210000000000000000000004, 210000000000000000000005, 210000000000000000000006, 210000000000000000000007, ); runOnlyForDeploymentPostprocessing = 0; };
+		700000000000000000000005 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (230000000000000000000001 /* TaskDeckTests.swift in Sources */, 230000000000000000000002 /* Localization.swift in Sources */, 230000000000000000000003 /* TaskItem.swift in Sources */, 230000000000000000000004 /* FocusModels.swift in Sources */, 230000000000000000000005 /* TaskDatabase.swift in Sources */, 230000000000000000000006 /* TaskDeckArchive.swift in Sources */, 230000000000000000000007 /* SharedTaskAccess.swift in Sources */, 230000000000000000000008 /* TaskStore.swift in Sources */, 230000000000000000000009 /* FocusStore.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -215,16 +244,19 @@
 /* Begin XCBuildConfiguration section */
 		B00000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_TESTABILITY = YES; GCC_C_LANGUAGE_STANDARD = gnu17; MACOSX_DEPLOYMENT_TARGET = 13.0; ONLY_ACTIVE_ARCH = YES; SDKROOT = macosx; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
 		B00000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; GCC_C_LANGUAGE_STANDARD = gnu17; MACOSX_DEPLOYMENT_TARGET = 13.0; SDKROOT = macosx; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; name = Release; };
-		B00000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = Assets/TaskDeck.entitlements; CODE_SIGN_STYLE = Automatic; COMBINE_HIDPI_IMAGES = YES; CURRENT_PROJECT_VERSION = 9; DEVELOPMENT_TEAM = ""; ENABLE_APP_SANDBOX = NO; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Assets/Info.plist; MARKETING_VERSION = 1.8.0; PRODUCT_BUNDLE_IDENTIFIER = "$(TASKDECK_APP_BUNDLE_IDENTIFIER)"; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TASKDECK_APP_BUNDLE_IDENTIFIER = local.taskdeck.macos; TASKDECK_APP_GROUP_IDENTIFIER = group.local.taskdeck.shared; TASKDECK_WIDGET_BUNDLE_IDENTIFIER = local.taskdeck.macos.widget; }; name = Debug; };
-		B00000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = Assets/TaskDeck.entitlements; CODE_SIGN_STYLE = Automatic; COMBINE_HIDPI_IMAGES = YES; CURRENT_PROJECT_VERSION = 9; DEAD_CODE_STRIPPING = YES; DEVELOPMENT_TEAM = ""; ENABLE_APP_SANDBOX = NO; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Assets/Info.plist; MARKETING_VERSION = 1.8.0; ONLY_ACTIVE_ARCH = NO; PRODUCT_BUNDLE_IDENTIFIER = "$(TASKDECK_APP_BUNDLE_IDENTIFIER)"; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TASKDECK_APP_BUNDLE_IDENTIFIER = local.taskdeck.macos; TASKDECK_APP_GROUP_IDENTIFIER = group.local.taskdeck.shared; TASKDECK_WIDGET_BUNDLE_IDENTIFIER = local.taskdeck.macos.widget; }; name = Release; };
-		B00000000000000000000005 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = Assets/TaskDeckWidget.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 9; DEVELOPMENT_TEAM = ""; ENABLE_APP_SANDBOX = YES; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = WidgetExtension/Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", "@executable_path/../../../../Frameworks", ); MACOSX_DEPLOYMENT_TARGET = 14.0; MARKETING_VERSION = 1.8.0; PRODUCT_BUNDLE_IDENTIFIER = "$(TASKDECK_WIDGET_BUNDLE_IDENTIFIER)"; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TASKDECK_APP_BUNDLE_IDENTIFIER = local.taskdeck.macos; TASKDECK_APP_GROUP_IDENTIFIER = group.local.taskdeck.shared; TASKDECK_WIDGET_BUNDLE_IDENTIFIER = local.taskdeck.macos.widget; }; name = Debug; };
-		B00000000000000000000006 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = Assets/TaskDeckWidget.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 9; DEAD_CODE_STRIPPING = YES; DEVELOPMENT_TEAM = ""; ENABLE_APP_SANDBOX = YES; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = WidgetExtension/Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", "@executable_path/../../../../Frameworks", ); MACOSX_DEPLOYMENT_TARGET = 14.0; MARKETING_VERSION = 1.8.0; ONLY_ACTIVE_ARCH = NO; PRODUCT_BUNDLE_IDENTIFIER = "$(TASKDECK_WIDGET_BUNDLE_IDENTIFIER)"; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TASKDECK_APP_BUNDLE_IDENTIFIER = local.taskdeck.macos; TASKDECK_APP_GROUP_IDENTIFIER = group.local.taskdeck.shared; TASKDECK_WIDGET_BUNDLE_IDENTIFIER = local.taskdeck.macos.widget; }; name = Release; };
+		B00000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = Assets/TaskDeck.entitlements; CODE_SIGN_STYLE = Automatic; COMBINE_HIDPI_IMAGES = YES; CURRENT_PROJECT_VERSION = 10; DEVELOPMENT_TEAM = ""; ENABLE_APP_SANDBOX = NO; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Assets/Info.plist; MARKETING_VERSION = 1.9.0; PRODUCT_BUNDLE_IDENTIFIER = "$(TASKDECK_APP_BUNDLE_IDENTIFIER)"; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TASKDECK_APP_BUNDLE_IDENTIFIER = local.taskdeck.macos; TASKDECK_APP_GROUP_IDENTIFIER = group.local.taskdeck.shared; TASKDECK_WIDGET_BUNDLE_IDENTIFIER = local.taskdeck.macos.widget; }; name = Debug; };
+		B00000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = Assets/TaskDeck.entitlements; CODE_SIGN_STYLE = Automatic; COMBINE_HIDPI_IMAGES = YES; CURRENT_PROJECT_VERSION = 10; DEAD_CODE_STRIPPING = YES; DEVELOPMENT_TEAM = ""; ENABLE_APP_SANDBOX = NO; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Assets/Info.plist; MARKETING_VERSION = 1.9.0; ONLY_ACTIVE_ARCH = NO; PRODUCT_BUNDLE_IDENTIFIER = "$(TASKDECK_APP_BUNDLE_IDENTIFIER)"; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TASKDECK_APP_BUNDLE_IDENTIFIER = local.taskdeck.macos; TASKDECK_APP_GROUP_IDENTIFIER = group.local.taskdeck.shared; TASKDECK_WIDGET_BUNDLE_IDENTIFIER = local.taskdeck.macos.widget; }; name = Release; };
+		B00000000000000000000005 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = Assets/TaskDeckWidget.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 10; DEVELOPMENT_TEAM = ""; ENABLE_APP_SANDBOX = YES; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = WidgetExtension/Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", "@executable_path/../../../../Frameworks", ); MACOSX_DEPLOYMENT_TARGET = 14.0; MARKETING_VERSION = 1.9.0; PRODUCT_BUNDLE_IDENTIFIER = "$(TASKDECK_WIDGET_BUNDLE_IDENTIFIER)"; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TASKDECK_APP_BUNDLE_IDENTIFIER = local.taskdeck.macos; TASKDECK_APP_GROUP_IDENTIFIER = group.local.taskdeck.shared; TASKDECK_WIDGET_BUNDLE_IDENTIFIER = local.taskdeck.macos.widget; }; name = Debug; };
+		B00000000000000000000006 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = Assets/TaskDeckWidget.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 10; DEAD_CODE_STRIPPING = YES; DEVELOPMENT_TEAM = ""; ENABLE_APP_SANDBOX = YES; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = WidgetExtension/Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", "@executable_path/../../../../Frameworks", ); MACOSX_DEPLOYMENT_TARGET = 14.0; MARKETING_VERSION = 1.9.0; ONLY_ACTIVE_ARCH = NO; PRODUCT_BUNDLE_IDENTIFIER = "$(TASKDECK_WIDGET_BUNDLE_IDENTIFIER)"; PRODUCT_NAME = "$(TARGET_NAME)"; REGISTER_APP_GROUPS = YES; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 6.0; TASKDECK_APP_BUNDLE_IDENTIFIER = local.taskdeck.macos; TASKDECK_APP_GROUP_IDENTIFIER = group.local.taskdeck.shared; TASKDECK_WIDGET_BUNDLE_IDENTIFIER = local.taskdeck.macos.widget; }; name = Release; };
+		B00000000000000000000007 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = local.taskdeck.macos.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 6.0; }; name = Debug; };
+		B00000000000000000000008 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = local.taskdeck.macos.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 6.0; }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
 		800000000000000000000001 /* Build configuration list for PBXProject "TaskDeck" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000001 /* Debug */, B00000000000000000000002 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		800000000000000000000002 /* Build configuration list for PBXNativeTarget "TaskDeck" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000003 /* Debug */, B00000000000000000000004 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		800000000000000000000003 /* Build configuration list for PBXNativeTarget "TaskDeckWidget" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000005 /* Debug */, B00000000000000000000006 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		800000000000000000000004 /* Build configuration list for PBXNativeTarget "TaskDeckTests" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000007 /* Debug */, B00000000000000000000008 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = A00000000000000000000001 /* Project object */;

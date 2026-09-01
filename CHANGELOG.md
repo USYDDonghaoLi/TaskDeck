@@ -2,6 +2,14 @@
 
 All notable TaskDeck changes are recorded here. Version numbers follow semantic versioning, while `CFBundleVersion` uses a monotonically increasing integer.
 
+## 1.9.0 (Build 10) - Quality & Onboarding
+
+- Added a first-run bilingual onboarding experience for empty installations; existing users with tasks are never interrupted.
+- Added keyboard navigation for Today (`⌘1`), All Tasks (`⌘2`), and Completed (`⌘3`) alongside the existing creation, search, clear-filter, and desktop-board shortcuts.
+- Added VoiceOver labels and state descriptions to task, subtask, focus, report, filter, composer, sidebar, and desktop-board controls.
+- Added a native standalone XCTest target to the shared Xcode scheme with isolated temporary-database coverage for persistence, subtasks, compound filters, Trash, backup restoration, and legacy JSON.
+- Confirmed that tests and onboarding require no database migration and never read or modify the user's TaskDeck database.
+
 ## 1.8.0 (Build 9) - Precision Workflow
 
 - Added persistent, checkable subtasks backed by the existing relational SQLite subtask table.

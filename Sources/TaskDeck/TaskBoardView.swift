@@ -86,6 +86,9 @@ private struct TodayPulse: View {
         HStack(spacing: 18) {
             ProgressRing(progress: store.todayProgress)
                 .frame(width: 58, height: 58)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(language.text("今日完成率", "Today's completion rate"))
+                .accessibilityValue("\(Int(store.todayProgress * 100))%")
 
             VStack(alignment: .leading, spacing: 5) {
                 Text("TODAY'S SIGNAL")
@@ -177,6 +180,10 @@ private struct TaskCard: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(task.isCompleted
+                ? language.text("将任务恢复为未完成", "Restore task as incomplete")
+                : language.text("完成任务", "Complete task"))
+            .accessibilityValue(task.title)
             .help(task.isCompleted
                 ? language.text("恢复为未完成", "Restore as incomplete")
                 : language.text("标记完成", "Mark as completed"))
@@ -209,6 +216,10 @@ private struct TaskCard: View {
                                         .foregroundStyle(subtask.isCompleted ? DeckTheme.lime : DeckTheme.cyan.opacity(0.75))
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel(subtask.isCompleted
+                                    ? language.text("将子任务恢复为未完成", "Restore subtask as incomplete")
+                                    : language.text("完成子任务", "Complete subtask"))
+                                .accessibilityValue(subtask.title)
                                 Text(subtask.title)
                                     .font(.system(size: 8, weight: .medium))
                                     .foregroundStyle(subtask.isCompleted ? DeckTheme.muted : DeckTheme.text)
@@ -223,6 +234,7 @@ private struct TaskCard: View {
                                         .foregroundStyle(DeckTheme.muted.opacity(0.7))
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel(language.text("删除子任务", "Delete subtask") + " " + subtask.title)
                             }
                         }
                     }
@@ -270,6 +282,7 @@ private struct TaskCard: View {
                     .overlay(RoundedRectangle(cornerRadius: 7).stroke(DeckTheme.border))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(language.text("编辑任务", "Edit task") + " " + task.title)
             .help(language.text("编辑名称、时长和优先级", "Edit name, duration, and priority"))
 
             Button {
@@ -283,6 +296,7 @@ private struct TaskCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 7))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(focusActionTitle + " " + task.title)
             .disabled(task.isCompleted || (focus.active != nil && !isFocused))
             .opacity(task.isCompleted || (focus.active != nil && !isFocused) ? 0.35 : 1)
             .help(focusActionTitle)
@@ -318,6 +332,7 @@ private struct TaskCard: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
+            .accessibilityLabel(language.text("更多任务操作", "More task actions") + " " + task.title)
         }
         .padding(14)
         .background(task.isCompleted ? DeckTheme.panel.opacity(0.48) : DeckTheme.panel)

@@ -25,7 +25,10 @@ TaskDeck 是一个本地优先、极客风格的原生 macOS TODO 与专注管�
 - 在设置中浏览自动备份、检查完整性，并安全恢复任务与专注数据
 - 全局搜索任务、方向、备注和子任务，并叠加优先级与日期筛选
 - 通过菜单栏快速添加任务，无需先打开主窗口
-- 支持 `⌘N` 新建、`⌘F` 搜索、`⌘⌥F` 清除筛选和 `⌘⇧D` 打开桌面板
+- 支持 `⌘N` 新建、`⌘F` 搜索、`⌘⌥F` 清除筛选、`⌘1/2/3` 切换任务流和 `⌘⇧D` 打开桌面板
+- 全新安装且没有任务时显示双语新手引导；已有任务的用户不会被打断
+- 为任务、子任务、专注、报告、筛选和桌面板控件补充 VoiceOver 标签与状态
+- 内置原生 XCTest 目标，使用独立临时数据库验证核心数据安全与兼容性
 - 通过设置窗口导入或导出完整 JSON 归档
 - 在设置窗口切换简体中文与英文，语言偏好会自动保存
 - 支持 Hardened Runtime、Universal Binary、Developer ID、Apple 公证和 DMG 公开发布流水线
@@ -50,7 +53,7 @@ TaskDeck 不会上传任务内容。1.5 起，任务、专注记录和运行中�
 
 升级应用不会删除已有任务。1.5 首次启动会优先读取 1.4 的共享 `tasks.json`，再迁移专注 JSON；原文件不会被移动、覆盖或删除。导入 JSON 前也会先备份当前数据库。
 
-1.6 又增加了旧开发 App Group 到正式发布 App Group 的只读 SQLite 迁移：正式版首次启动会复制任务、专注历史和运行中计时，旧数据库原样保留。1.7 的删除操作改为回收站，并提供经过完整性校验的数据库备份恢复；升级时只新增可空字段，不会删除已有任务。1.8 启用早已预留的子任务关系表，因此不需要破坏性迁移。完整隐私声明见 [PRIVACY.md](PRIVACY.md)。
+1.6 又增加了旧开发 App Group 到正式发布 App Group 的只读 SQLite 迁移：正式版首次启动会复制任务、专注历史和运行中计时，旧数据库原样保留。1.7 的删除操作改为回收站，并提供经过完整性校验的数据库备份恢复；升级时只新增可空字段，不会删除已有任务。1.8 启用早已预留的子任务关系表，因此不需要破坏性迁移。1.9 不改变数据库结构；XCTest 始终使用临时目录，新手引导也不会读取或修改任务。完整隐私声明见 [PRIVACY.md](PRIVACY.md)。
 
 ## 系统要求
 
@@ -63,8 +66,13 @@ TaskDeck 不会上传任务内容。1.5 起，任务、专注记录和运行中�
 
 ```bash
 zsh scripts/check_logic.sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  xcodebuild -project TaskDeck.xcodeproj -scheme TaskDeck \
+  -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
 zsh scripts/package_app.sh
 ```
+
+也可以在 Xcode 中选择 `Product → Test`（`⌘U`）运行同一组 XCTest。测试数据仅写入系统临时目录并在结束后清理。
 
 构建结果位于 `outputs/TaskDeck.app`，压缩包位于 `outputs/TaskDeck-macOS.zip`。
 
@@ -111,6 +119,6 @@ outputs/            使用说明、更新说明和示例报告
 
 ## 版本
 
-当前版本：TaskDeck 1.8.0（Build 9）。
+当前版本：TaskDeck 1.9.0（Build 10）。
 
 这是一个个人 Vibe Coding 项目，代码库默认保持私有；如果将来希望作为开源作品展示，可以在清理签名、隐私与发布配置后再改为公开。

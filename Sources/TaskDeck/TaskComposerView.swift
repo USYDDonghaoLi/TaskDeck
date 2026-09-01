@@ -108,6 +108,7 @@ struct TaskComposerView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(language.text("关闭任务编辑器", "Close task editor"))
         }
     }
 
@@ -116,6 +117,7 @@ struct TaskComposerView: View {
             FieldLabel(number: "01", text: language.text("大方向", "Direction"))
             TextField(language.text("例如：产品发布 / 健身 / 学习", "e.g. Product Launch / Fitness / Learning"), text: $direction)
                 .deckTextField()
+                .accessibilityLabel(language.text("大方向", "Direction"))
 
             if !store.directions.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -153,6 +155,7 @@ struct TaskComposerView: View {
                     .scrollContentBackground(.hidden)
                     .padding(8)
                     .frame(height: 72)
+                    .accessibilityLabel(language.text("精准任务描述", "Precise task description"))
             }
             .background(DeckTheme.panel)
             .clipShape(RoundedRectangle(cornerRadius: 9))
@@ -160,6 +163,7 @@ struct TaskComposerView: View {
 
             TextField(language.text("补充备注（可选）", "Additional notes (optional)"), text: $notes)
                 .deckTextField()
+                .accessibilityLabel(language.text("任务备注", "Task notes"))
         }
     }
 
@@ -178,6 +182,10 @@ struct TaskComposerView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 7))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(language.text("设置优先级", "Set priority") + " " + item.title(in: language.current))
+                    .accessibilityValue(priority == item
+                        ? language.text("已选择", "Selected")
+                        : language.text("未选择", "Not selected"))
                 }
             }
         }
@@ -204,6 +212,10 @@ struct TaskComposerView: View {
                             .foregroundStyle(subtask.isCompleted ? DeckTheme.lime : DeckTheme.cyan)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(subtask.isCompleted
+                        ? language.text("将子任务恢复为未完成", "Restore subtask as incomplete")
+                        : language.text("完成子任务", "Complete subtask"))
+                    .accessibilityValue(subtask.title)
                     TextField(language.text("子任务描述", "Subtask description"), text: $subtask.title)
                         .textFieldStyle(.plain)
                         .font(.system(size: 10, weight: .medium))
@@ -216,6 +228,7 @@ struct TaskComposerView: View {
                             .foregroundStyle(DeckTheme.muted)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(language.text("移除子任务", "Remove subtask") + " " + subtask.title)
                 }
                 .padding(.horizontal, 11)
                 .frame(height: 34)
@@ -227,6 +240,7 @@ struct TaskComposerView: View {
                 TextField(language.text("添加一个可勾选的步骤", "Add a checkable step"), text: $newSubtaskTitle)
                     .deckTextField()
                     .onSubmit(addSubtaskDraft)
+                    .accessibilityLabel(language.text("新子任务", "New subtask"))
                 Button(action: addSubtaskDraft) {
                     Image(systemName: "plus")
                         .font(.system(size: 10, weight: .black))
@@ -237,6 +251,7 @@ struct TaskComposerView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(newSubtaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel(language.text("添加子任务", "Add subtask"))
             }
         }
     }
@@ -317,6 +332,7 @@ struct TaskComposerView: View {
                 .frame(height: 42)
                 .background(DeckTheme.panelRaised)
                 .clipShape(RoundedRectangle(cornerRadius: 9))
+                .keyboardShortcut(.cancelAction)
 
             Button(action: saveTask) {
                 Label(

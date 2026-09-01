@@ -6,6 +6,7 @@ extension Notification.Name {
     static let taskDeckFocusSearch = Notification.Name("TaskDeck.command.focusSearch")
     static let taskDeckClearFilters = Notification.Name("TaskDeck.command.clearFilters")
     static let taskDeckOpenDesktop = Notification.Name("TaskDeck.command.openDesktop")
+    static let taskDeckSelectFilter = Notification.Name("TaskDeck.command.selectFilter")
 }
 
 struct DashboardView: View {
@@ -24,6 +25,7 @@ struct DashboardView: View {
     @State private var priorityFilter: TaskPriorityFilter = .all
     @State private var dateFilter: TaskDateFilter = .all
     @FocusState private var searchFocused: Bool
+    @AppStorage("TaskDeck.hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
         ZStack {
@@ -123,6 +125,17 @@ struct DashboardView: View {
             }
             .padding(.bottom, 12)
         }
+        .overlay {
+            if !hasCompletedOnboarding && store.tasks.isEmpty && store.persistenceError == nil {
+                OnboardingView {
+                    hasCompletedOnboarding = true
+                    presentNewTask()
+                } onSkip: {
+                    hasCompletedOnboarding = true
+                }
+                .environmentObject(language)
+            }
+        }
         .sheet(isPresented: $showingComposer, onDismiss: { editingTask = nil }) {
             TaskComposerView(editingTask: editingTask)
                 .environmentObject(store)
@@ -150,6 +163,12 @@ struct DashboardView: View {
             selectedDirection = nil
         }
         .onReceive(NotificationCenter.default.publisher(for: .taskDeckOpenDesktop)) { _ in openWindow(id: "desktop") }
+        .onReceive(NotificationCenter.default.publisher(for: .taskDeckSelectFilter)) { notification in
+            guard let rawValue = notification.object as? String, let selected = TaskFilter(rawValue: rawValue) else { return }
+            filter = selected
+            selectedDirection = nil
+            highlightedTaskID = nil
+        }
     }
 
     private func presentNewTask() {
@@ -202,6 +221,109 @@ struct DashboardView: View {
     }
 }
 
+private struct OnboardingView: View {
+    @EnvironmentObject private var language: LanguageStore
+    let onStart: () -> Void
+    let onSkip: () -> Void
+
+    var body: some View {
+        ZStack {
+            DeckTheme.void.opacity(0.97).ignoresSafeArea()
+            GridBackground().ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                VStack(spacing: 8) {
+                    Image(systemName: "command.square.fill")
+                        .font(.system(size: 45, weight: .black))
+                        .foregroundStyle(DeckTheme.cyan)
+                        .accessibilityHidden(true)
+                    Text("TASKDECK // FIRST BOOT")
+                        .font(.system(size: 9, weight: .black))
+                        .tracking(1.8)
+                        .foregroundStyle(DeckTheme.cyan)
+                    Text(language.text("把方向变成今天能完成的精准行动", "Turn direction into precise actions you can finish today"))
+                        .font(.system(size: 22, weight: .black))
+                        .multilineTextAlignment(.center)
+                    Text(language.text("所有内容默认只保存在你的 Mac，并在每次修改前自动备份。", "Everything stays on your Mac by default and is backed up before every change."))
+                        .font(.system(size: 10))
+                        .foregroundStyle(DeckTheme.muted)
+                }
+
+                HStack(alignment: .top, spacing: 12) {
+                    onboardingFeature(
+                        "scope",
+                        language.text("方向 + 精准任务", "Direction + Precise Task"),
+                        language.text("先写清长期方向，再定义下一步可执行动作。", "Name the long-term direction, then define the next executable action.")
+                    )
+                    onboardingFeature(
+                        "timer",
+                        language.text("专注 + 复盘", "Focus + Review"),
+                        language.text("为任务计时，用日、周、月报告回看真实投入。", "Time a task and review actual effort in daily, weekly, and monthly reports.")
+                    )
+                    onboardingFeature(
+                        "command",
+                        language.text("键盘优先", "Keyboard First"),
+                        language.text("⌘N 新建 · ⌘F 搜索 · ⌘1/2/3 切换任务流", "⌘N new · ⌘F search · ⌘1/2/3 switch task views")
+                    )
+                }
+                .frame(maxWidth: 780)
+
+                Picker(language.text("界面语言", "Interface Language"), selection: $language.current) {
+                    ForEach(AppLanguage.allCases) { item in
+                        Text(item.label).tag(item)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 220)
+                .accessibilityLabel(language.text("界面语言", "Interface language"))
+
+                HStack(spacing: 12) {
+                    Button(language.text("先看看界面", "Explore First"), action: onSkip)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(DeckTheme.muted)
+                        .padding(.horizontal, 18)
+                        .frame(height: 40)
+                        .background(DeckTheme.panelRaised)
+                        .clipShape(RoundedRectangle(cornerRadius: 9))
+                    Button(action: onStart) {
+                        Label(language.text("创建第一个任务", "Create My First Task"), systemImage: "arrow.right")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(DeckTheme.void)
+                            .padding(.horizontal, 20)
+                            .frame(height: 40)
+                            .background(DeckTheme.cyan)
+                            .clipShape(RoundedRectangle(cornerRadius: 9))
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(40)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func onboardingFeature(_ symbol: String, _ title: String, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(DeckTheme.cyan)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.system(size: 11, weight: .black))
+            Text(detail)
+                .font(.system(size: 9))
+                .foregroundStyle(DeckTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .deckPanel(radius: 12, padding: 15)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct SearchFilterBar: View {
     @EnvironmentObject private var language: LanguageStore
     @Binding var searchText: String
@@ -224,6 +346,8 @@ private struct SearchFilterBar: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 10, weight: .medium))
                     .focused(searchFocus)
+                    .accessibilityLabel(language.text("全局搜索", "Global search"))
+                    .accessibilityHint(language.text("搜索任务名称、大方向、备注和子任务", "Search task titles, directions, notes, and subtasks"))
                 Text("⌘F")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(DeckTheme.muted)
@@ -242,6 +366,7 @@ private struct SearchFilterBar: View {
             }
             .labelsHidden()
             .frame(width: 140)
+            .accessibilityLabel(language.text("优先级筛选", "Priority filter"))
 
             Picker(language.text("日期", "Date"), selection: $dateFilter) {
                 ForEach(TaskDateFilter.allCases) { item in
@@ -250,6 +375,7 @@ private struct SearchFilterBar: View {
             }
             .labelsHidden()
             .frame(width: 130)
+            .accessibilityLabel(language.text("日期筛选", "Date filter"))
 
             if isFiltering {
                 Button {
@@ -268,6 +394,15 @@ private struct SearchFilterBar: View {
         .padding(.horizontal, 24)
         .frame(height: 48)
         .background(DeckTheme.void.opacity(0.72))
+        .onExitCommand {
+            if searchFocus.wrappedValue {
+                searchFocus.wrappedValue = false
+            } else if isFiltering {
+                searchText = ""
+                priorityFilter = .all
+                dateFilter = .all
+            }
+        }
     }
 }
 
@@ -321,6 +456,8 @@ private struct SidebarView: View {
             }
             .buttonStyle(.plain)
             .keyboardShortcut("n", modifiers: .command)
+            .accessibilityLabel(language.text("新建精准任务", "New precise task"))
+            .accessibilityHint(language.text("打开任务编辑器，快捷键 Command N", "Opens the task editor. Shortcut Command N."))
             .padding(.horizontal, 14)
             .padding(.bottom, 20)
 
@@ -390,6 +527,7 @@ private struct SidebarView: View {
 }
 
 private struct SidebarRow: View {
+    @EnvironmentObject private var language: LanguageStore
     let title: String
     let symbol: String
     let count: Int
@@ -427,6 +565,8 @@ private struct SidebarRow: View {
             .clipShape(RoundedRectangle(cornerRadius: 7))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(title), \(count)")
+        .accessibilityValue(isSelected ? language.text("已选中", "Selected") : "")
     }
 }
 

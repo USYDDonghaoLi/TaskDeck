@@ -41,6 +41,7 @@ struct DesktopWidgetView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 7))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(language.text("新建精准任务", "New precise task"))
                 }
                 .padding(17)
 
@@ -151,6 +152,7 @@ private struct DesktopTaskRow: View {
                     }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(language.text("完成任务", "Complete task") + " " + task.title)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(task.title)
@@ -181,6 +183,9 @@ private struct DesktopTaskRow: View {
             }
             .buttonStyle(.plain)
             .disabled(focus.active != nil && focus.active?.taskID != task.id)
+            .accessibilityLabel((focus.active?.taskID == task.id
+                ? language.text("暂停或继续专注", "Pause or resume focus")
+                : language.text("开始专注", "Start focus")) + " " + task.title)
             Button(action: onEdit) {
                 Image(systemName: "pencil")
                     .font(.system(size: 9, weight: .bold))
@@ -188,6 +193,7 @@ private struct DesktopTaskRow: View {
                     .frame(width: 22, height: 22)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(language.text("编辑任务", "Edit task") + " " + task.title)
         }
         .padding(12)
         .background(DeckTheme.panel)
@@ -213,6 +219,9 @@ private struct DesktopFocusStrip: View {
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(active.isPaused
+                        ? language.text("继续专注", "Resume focus")
+                        : language.text("暂停专注", "Pause focus"))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(active.taskTitle)
                             .font(.system(size: 8, weight: .bold))
@@ -232,6 +241,7 @@ private struct DesktopFocusStrip: View {
                         .buttonStyle(.plain)
                         .font(.system(size: 7, weight: .black))
                         .foregroundStyle(DeckTheme.muted)
+                        .accessibilityLabel(language.text("结束专注", "Finish focus") + " " + active.taskTitle)
                 }
                 .padding(.horizontal, 17)
                 .frame(height: 46)

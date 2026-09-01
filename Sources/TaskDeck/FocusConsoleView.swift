@@ -21,6 +21,9 @@ struct FocusConsoleView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(active.isPaused
+                            ? language.text("继续专注", "Resume focus")
+                            : language.text("暂停专注", "Pause focus"))
 
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 7) {
@@ -59,6 +62,7 @@ struct FocusConsoleView: View {
                             .frame(height: 30)
                             .background(DeckTheme.panelRaised)
                             .clipShape(RoundedRectangle(cornerRadius: 7))
+                            .accessibilityLabel(language.text("结束专注", "Finish focus") + " " + active.taskTitle)
 
                         Menu {
                             Button(language.text("放弃本次记录", "Discard This Session"), role: .destructive) { focus.discardActive() }
@@ -71,6 +75,7 @@ struct FocusConsoleView: View {
                         .menuStyle(.borderlessButton)
                         .menuIndicator(.hidden)
                         .fixedSize()
+                        .accessibilityLabel(language.text("更多专注操作", "More focus actions"))
                     }
                     .padding(.horizontal, 20)
                     .frame(height: 56)

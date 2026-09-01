@@ -25,7 +25,10 @@ TaskDeck is a local-first, hacker-inspired native macOS app for task execution a
 - Browse automatic backups, check integrity, and safely restore task and focus data in Settings
 - Search task names, directions, notes, and subtasks globally, then combine priority and date filters
 - Add tasks from the macOS menu bar without opening the main window first
-- Use `⌘N` for new task, `⌘F` for search, `⌘⌥F` to clear filters, and `⌘⇧D` for the desktop board
+- Use `⌘N` for new task, `⌘F` for search, `⌘⌥F` to clear filters, `⌘1/2/3` to switch task flows, and `⌘⇧D` for the desktop board
+- See bilingual onboarding only on an empty first installation; users with existing tasks are never interrupted
+- Navigate task, subtask, focus, report, filter, composer, sidebar, and desktop-board controls with descriptive VoiceOver labels
+- Run the native XCTest target against isolated temporary databases for core safety and compatibility coverage
 - Import or export a complete JSON archive from the Settings window
 - Switch between Simplified Chinese and English in Settings, with the preference remembered locally
 - Support Hardened Runtime, Universal binaries, Developer ID, Apple notarization, and a public DMG release pipeline
@@ -50,7 +53,7 @@ TaskDeck does not upload task content. Starting in 1.5, tasks, focus history, an
 
 Upgrading does not delete existing tasks. On the first 1.5 launch, TaskDeck imports the 1.4 shared `tasks.json` first, then the focus JSON files. It never moves, overwrites, or deletes those originals. JSON import also backs up the current database before replacing data.
 
-Version 1.6 also adds a read-only SQLite migration from the development App Group to a registered production App Group. Tasks, focus history, and an active timer are copied on first launch while the old database remains byte-for-byte untouched. Version 1.7 moves deleted tasks to Trash and adds integrity-checked database restoration. Its migration only adds an optional column and does not delete existing tasks. Version 1.8 activates the already-reserved relational subtask table, so no destructive migration is required. See [PRIVACY.md](PRIVACY.md) for the complete privacy policy.
+Version 1.6 also adds a read-only SQLite migration from the development App Group to a registered production App Group. Tasks, focus history, and an active timer are copied on first launch while the old database remains byte-for-byte untouched. Version 1.7 moves deleted tasks to Trash and adds integrity-checked database restoration. Its migration only adds an optional column and does not delete existing tasks. Version 1.8 activates the already-reserved relational subtask table, so no destructive migration is required. Version 1.9 does not change the database schema; XCTest always uses temporary directories, and onboarding neither reads nor changes tasks. See [PRIVACY.md](PRIVACY.md) for the complete privacy policy.
 
 ## Requirements
 
@@ -63,8 +66,13 @@ Version 1.6 also adds a read-only SQLite migration from the development App Grou
 
 ```bash
 zsh scripts/check_logic.sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  xcodebuild -project TaskDeck.xcodeproj -scheme TaskDeck \
+  -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
 zsh scripts/package_app.sh
 ```
+
+You can also select `Product → Test` (`⌘U`) in Xcode. The same XCTest suite writes only to system temporary directories and removes its fixtures afterward.
 
 The app bundle is written to `outputs/TaskDeck.app`; the distributable archive is written to `outputs/TaskDeck-macOS.zip`.
 
@@ -111,6 +119,6 @@ outputs/            User guides, release notes, and sample reports
 
 ## Version
 
-Current version: TaskDeck 1.8.0 (Build 9).
+Current version: TaskDeck 1.9.0 (Build 10).
 
 This is a personal vibe-coding project. The repository is private by default; it can be made public later after reviewing signing, privacy, and release configuration.

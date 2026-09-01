@@ -38,6 +38,23 @@ struct TaskDeckApp: App {
 
                 Divider()
 
+                Button(language.text("今日任务", "Today")) {
+                    selectFilter(.today)
+                }
+                .keyboardShortcut("1", modifiers: .command)
+
+                Button(language.text("全部任务", "All Tasks")) {
+                    selectFilter(.inbox)
+                }
+                .keyboardShortcut("2", modifiers: .command)
+
+                Button(language.text("已完成", "Completed")) {
+                    selectFilter(.completed)
+                }
+                .keyboardShortcut("3", modifiers: .command)
+
+                Divider()
+
                 Button(language.text("打开桌面悬浮", "Open Desktop Board")) {
                     NotificationCenter.default.post(name: .taskDeckOpenDesktop, object: nil)
                 }
@@ -73,6 +90,10 @@ struct TaskDeckApp: App {
                 .environment(\.locale, language.current.locale)
         }
     }
+
+    private func selectFilter(_ filter: TaskFilter) {
+        NotificationCenter.default.post(name: .taskDeckSelectFilter, object: filter.rawValue)
+    }
 }
 
 private struct MenuBarQuickAddView: View {
@@ -104,9 +125,11 @@ private struct MenuBarQuickAddView: View {
 
             TextField(language.text("大方向（可选）", "Direction (optional)"), text: $direction)
                 .quickAddField()
+                .accessibilityLabel(language.text("大方向", "Direction"))
             TextField(language.text("精准任务描述", "Precise task description"), text: $title)
                 .quickAddField()
                 .onSubmit(save)
+                .accessibilityLabel(language.text("精准任务描述", "Precise task description"))
 
             HStack(spacing: 8) {
                 Picker(language.text("预计时间", "Estimate"), selection: $estimatedMinutes) {
@@ -115,12 +138,14 @@ private struct MenuBarQuickAddView: View {
                     }
                 }
                 .labelsHidden()
+                .accessibilityLabel(language.text("预计时间", "Estimate"))
                 Picker(language.text("优先级", "Priority"), selection: $priority) {
                     ForEach(TaskPriority.allCases) { item in
                         Text(item.title(in: language.current)).tag(item)
                     }
                 }
                 .labelsHidden()
+                .accessibilityLabel(language.text("优先级", "Priority"))
             }
 
             Button(action: save) {
@@ -134,6 +159,7 @@ private struct MenuBarQuickAddView: View {
             }
             .buttonStyle(.plain)
             .disabled(!canSave)
+            .keyboardShortcut(.defaultAction)
 
             Text(language.text("不必打开主窗口；任务会立即同步到桌面板和 Widget。", "No main window required; the task syncs to the desktop board and Widget immediately."))
                 .font(.system(size: 7))

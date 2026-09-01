@@ -104,6 +104,7 @@ struct ReportPanel: View {
                         .clipShape(RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(language.text("导出 PDF 报告", "Export PDF report"))
                 .help(language.text("导出排版 PDF 报告", "Export a formatted PDF report"))
 
                 Button(action: copyReport) {
@@ -115,6 +116,7 @@ struct ReportPanel: View {
                         .clipShape(RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(language.text("复制 Markdown 报告", "Copy Markdown report"))
                 .help(language.text("复制 Markdown 报告", "Copy Markdown report"))
             }
 
