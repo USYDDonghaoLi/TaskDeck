@@ -131,22 +131,21 @@ private struct MenuBarQuickAddView: View {
                 .onSubmit(save)
                 .accessibilityLabel(language.text("精准任务描述", "Precise task description"))
 
-            HStack(spacing: 8) {
-                Picker(language.text("预计时间", "Estimate"), selection: $estimatedMinutes) {
-                    ForEach([15, 25, 45, 60, 90], id: \.self) { minutes in
-                        Text("\(minutes)M").tag(minutes)
-                    }
-                }
-                .labelsHidden()
-                .accessibilityLabel(language.text("预计时间", "Estimate"))
-                Picker(language.text("优先级", "Priority"), selection: $priority) {
-                    ForEach(TaskPriority.allCases) { item in
-                        Text(item.title(in: language.current)).tag(item)
-                    }
-                }
-                .labelsHidden()
-                .accessibilityLabel(language.text("优先级", "Priority"))
+            VStack(alignment: .leading, spacing: 5) {
+                Text(language.text("预计时间", "Estimate").uppercased())
+                    .font(.system(size: 7, weight: .black))
+                    .foregroundStyle(DeckTheme.muted)
+                DurationInputField(estimatedMinutes: $estimatedMinutes, showsHint: false)
             }
+
+            Picker(language.text("优先级", "Priority"), selection: $priority) {
+                ForEach(TaskPriority.allCases) { item in
+                    Text(item.title(in: language.current)).tag(item)
+                }
+            }
+            .labelsHidden()
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel(language.text("优先级", "Priority"))
 
             Button(action: save) {
                 Label(language.text("写入任务队列", "Add to Task Queue"), systemImage: "plus")

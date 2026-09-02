@@ -2,6 +2,16 @@
 
 All notable TaskDeck changes are recorded here. Version numbers follow semantic versioning, while `CFBundleVersion` uses a monotonically increasing integer.
 
+## 2.0.0 (Build 13) - Flexible Focus Workflow
+
+- Saved every paused focus interval as an independent segment and allowed switching to another task after pausing.
+- Allocated cross-midnight focus sessions proportionally to each daily, weekly, and monthly report interval.
+- Kept switching, pausing, and finishing focus updates transactional while preserving existing session history.
+- Synchronized edits to a focused task's title, direction, and estimated time with the active focus console.
+- Replaced custom duration steppers and quick-add presets with numeric minute/hour entry capped at 60 hours.
+- Added a prominent restore action for completed tasks while retaining task fields, subtasks, and focus history.
+- Added regression coverage for focus switching, day-boundary allocation, active estimate edits, duration limits, and task restoration.
+
 ## 1.9.2 (Build 12) - Reliable Language Switching
 
 - Replaced the system segmented language picker with an explicit high-contrast Chinese/English selector.

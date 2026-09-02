@@ -183,6 +183,140 @@ final class TaskDeckTests: XCTestCase {
         }
     }
 
+    func testCrossMidnightFocusIsAllocatedToEachDay() throws {
+        let midnight = Date(timeIntervalSince1970: 1_800_057_600)
+        let session = FocusSession(
+            taskID: UUID(),
+            taskTitle: "Cross midnight",
+            direction: "Quality",
+            startedAt: midnight.addingTimeInterval(-600),
+            endedAt: midnight.addingTimeInterval(600),
+            durationSeconds: 1_200
+        )
+        let previousDay = DateInterval(
+            start: midnight.addingTimeInterval(-86_400),
+            end: midnight
+        )
+        let nextDay = DateInterval(
+            start: midnight,
+            end: midnight.addingTimeInterval(86_400)
+        )
+
+        XCTAssertEqual(session.seconds(in: previousDay), 600)
+        XCTAssertEqual(session.seconds(in: nextDay), 600)
+        XCTAssertEqual(session.seconds(in: previousDay) + session.seconds(in: nextDay), session.durationSeconds)
+        XCTAssertEqual(session.clipped(to: previousDay)?.endedAt, midnight)
+        XCTAssertEqual(session.clipped(to: nextDay)?.startedAt, midnight)
+    }
+
+    @MainActor
+    func testPausedFocusCanSwitchTasksAndKeepSeparateSegments() throws {
+        try withTemporaryDatabase { databaseURL in
+            let tasks = TaskStore(databaseURL: databaseURL)
+            let focus = FocusStore(databaseURL: databaseURL)
+            let first = tasks.add(
+                direction: "Build",
+                title: "First task",
+                estimatedMinutes: 25,
+                dueAt: nil,
+                reminderEnabled: false
+            )
+            let second = tasks.add(
+                direction: "Review",
+                title: "Second task",
+                estimatedMinutes: 45,
+                dueAt: nil,
+                reminderEnabled: false
+            )
+            let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+            XCTAssertTrue(focus.beginOrToggle(first, now: start))
+            focus.pause(now: start.addingTimeInterval(600))
+            XCTAssertTrue(focus.active?.isPaused == true)
+            XCTAssertEqual(focus.seconds(for: first.id), 600)
+
+            XCTAssertTrue(focus.beginOrToggle(second, now: start.addingTimeInterval(900)))
+            XCTAssertEqual(focus.active?.taskID, second.id)
+            XCTAssertFalse(focus.active?.isPaused == true)
+            focus.pause(now: start.addingTimeInterval(1_200))
+            XCTAssertEqual(focus.seconds(for: second.id), 300)
+
+            var edited = second
+            edited.title = "Updated while focused"
+            edited.estimatedMinutes = 120
+            let saved = try XCTUnwrap(tasks.update(edited))
+            focus.updateActiveTaskDetails(from: saved)
+            XCTAssertEqual(focus.active?.taskTitle, edited.title)
+            XCTAssertEqual(focus.active?.estimatedMinutes, 120)
+
+            _ = focus.finish(now: start.addingTimeInterval(1_300))
+            XCTAssertNil(focus.active)
+            let reopened = FocusStore(databaseURL: databaseURL)
+            XCTAssertEqual(reopened.seconds(for: first.id), 600)
+            XCTAssertEqual(reopened.seconds(for: second.id), 300)
+
+            XCTAssertTrue(reopened.beginOrToggle(first, now: start.addingTimeInterval(2_000)))
+            reopened.pause(now: start.addingTimeInterval(2_060))
+            XCTAssertEqual(reopened.seconds(for: first.id), 660)
+            reopened.discardActive()
+            XCTAssertNil(reopened.active)
+            XCTAssertEqual(reopened.seconds(for: first.id), 600)
+        }
+    }
+
+    @MainActor
+    func testRestoringCompletedTaskPreservesTaskAndFocusHistory() throws {
+        try withTemporaryDatabase { databaseURL in
+            let store = TaskStore(databaseURL: databaseURL)
+            let task = store.add(
+                direction: "Recovery",
+                title: "Keep every field",
+                notes: "Important context",
+                estimatedMinutes: 90,
+                priority: .urgent,
+                dueAt: Date(timeIntervalSince1970: 1_900_000_000),
+                reminderEnabled: true,
+                subtasks: [Subtask(title: "Preserve this step")]
+            )
+            let database = try TaskDatabase(url: databaseURL)
+            let session = FocusSession(
+                taskID: task.id,
+                taskTitle: task.title,
+                direction: task.direction,
+                startedAt: Date(timeIntervalSince1970: 1_800_000_000),
+                endedAt: Date(timeIntervalSince1970: 1_800_000_300),
+                durationSeconds: 300
+            )
+            try database.replaceFocus(sessions: [session], active: nil, reason: "test-seed")
+
+            _ = store.toggle(task)
+            let completed = try XCTUnwrap(store.tasks.first)
+            XCTAssertTrue(completed.isCompleted)
+            _ = store.toggle(completed)
+
+            let restored = try XCTUnwrap(TaskStore(databaseURL: databaseURL).tasks.first)
+            XCTAssertFalse(restored.isCompleted)
+            XCTAssertEqual(restored.id, task.id)
+            XCTAssertEqual(restored.direction, task.direction)
+            XCTAssertEqual(restored.title, task.title)
+            XCTAssertEqual(restored.notes, task.notes)
+            XCTAssertEqual(restored.estimatedMinutes, task.estimatedMinutes)
+            XCTAssertEqual(restored.priority, task.priority)
+            XCTAssertEqual(restored.dueAt, task.dueAt)
+            XCTAssertEqual(restored.subtasks.map(\.id), task.subtasks.map(\.id))
+            XCTAssertEqual(restored.subtasks.map(\.title), task.subtasks.map(\.title))
+            XCTAssertEqual(restored.subtasks.map(\.completedAt), task.subtasks.map(\.completedAt))
+            XCTAssertEqual(try database.loadFocusSessions(), [session])
+        }
+    }
+
+    func testEstimatedDurationIsClampedToSixtyHours() {
+        let tooLong = TaskItem(direction: "", title: "Long", estimatedMinutes: 4_000)
+        let tooShort = TaskItem(direction: "", title: "Short", estimatedMinutes: 0)
+        XCTAssertEqual(tooLong.estimatedMinutes, 3_600)
+        XCTAssertEqual(tooShort.estimatedMinutes, 1)
+    }
+
     private func withTemporaryDatabase(
         _ body: (URL) throws -> Void
     ) throws {

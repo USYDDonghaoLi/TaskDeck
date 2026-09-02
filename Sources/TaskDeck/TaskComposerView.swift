@@ -4,11 +4,11 @@ import UserNotifications
 struct TaskComposerView: View {
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var notifications: NotificationManager
+    @EnvironmentObject private var focus: FocusStore
     @EnvironmentObject private var language: LanguageStore
     @Environment(\.dismiss) private var dismiss
 
     private let editingTask: TaskItem?
-    private let durationPresets = [15, 25, 45, 60, 90]
 
     @State private var direction: String
     @State private var title: String
@@ -259,21 +259,7 @@ struct TaskComposerView: View {
     private var durationSection: some View {
         VStack(alignment: .leading, spacing: 9) {
             FieldLabel(number: "05", text: language.text("预计时间", "Estimated Time"))
-            HStack(spacing: 7) {
-                ForEach(durationPresets, id: \.self) { minutes in
-                    Button(durationLabel(minutes)) { estimatedMinutes = minutes }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(estimatedMinutes == minutes ? DeckTheme.void : DeckTheme.muted)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 32)
-                        .background(estimatedMinutes == minutes ? DeckTheme.cyan : DeckTheme.panelRaised)
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
-                }
-            }
-            Stepper(language.format("自定义：%d 分钟", "Custom: %d minutes", estimatedMinutes), value: $estimatedMinutes, in: 5...480, step: 5)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(DeckTheme.muted)
+            DurationInputField(estimatedMinutes: $estimatedMinutes)
         }
     }
 
@@ -358,10 +344,6 @@ struct TaskComposerView: View {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func durationLabel(_ minutes: Int) -> String {
-        minutes >= 60 ? "\(minutes / 60)H\(minutes % 60 == 0 ? "" : "\(minutes % 60)")" : "\(minutes)M"
-    }
-
     private func priorityColor(_ item: TaskPriority) -> Color {
         switch item {
         case .normal: return DeckTheme.cyan
@@ -403,7 +385,10 @@ struct TaskComposerView: View {
             )
         }
 
-        if let savedTask { notifications.schedule(for: savedTask) }
+        if let savedTask {
+            notifications.schedule(for: savedTask)
+            focus.updateActiveTaskDetails(from: savedTask)
+        }
         dismiss()
     }
 
@@ -420,6 +405,99 @@ struct TaskComposerView: View {
             subtask.position = position
             return subtask
         }
+    }
+}
+
+enum DurationInputUnit: String, CaseIterable, Identifiable {
+    case minutes
+    case hours
+
+    var id: String { rawValue }
+
+    func title(in language: AppLanguage) -> String {
+        switch self {
+        case .minutes: return language == .simplifiedChinese ? "分钟" : "Minutes"
+        case .hours: return language == .simplifiedChinese ? "小时" : "Hours"
+        }
+    }
+}
+
+struct DurationInputField: View {
+    @EnvironmentObject private var language: LanguageStore
+    @Binding var estimatedMinutes: Int
+    @State private var unit: DurationInputUnit
+    private let showsHint: Bool
+
+    init(estimatedMinutes: Binding<Int>, showsHint: Bool = true) {
+        _estimatedMinutes = estimatedMinutes
+        self.showsHint = showsHint
+        let value = estimatedMinutes.wrappedValue
+        _unit = State(initialValue: value >= 60 && value.isMultiple(of: 60) ? .hours : .minutes)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                TextField(language.text("输入时长", "Enter duration"), value: amount, format: .number)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11, weight: .bold))
+                    .monospacedDigit()
+                    .padding(.horizontal, 11)
+                    .frame(height: 34)
+                    .background(DeckTheme.panel)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(DeckTheme.border))
+                    .accessibilityLabel(language.text("自定义预计时长", "Custom estimated duration"))
+
+                Picker(language.text("时长单位", "Duration unit"), selection: $unit) {
+                    ForEach(DurationInputUnit.allCases) { item in
+                        Text(item.title(in: language.current)).tag(item)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 112)
+                .accessibilityLabel(language.text("时长单位", "Duration unit"))
+            }
+
+            if showsHint {
+                Text(language.text(
+                    "填写数字并选择分钟或小时；最长 60 小时。",
+                    "Enter a number in minutes or hours; maximum 60 hours."
+                ))
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(DeckTheme.muted)
+            }
+        }
+        .onChange(of: unit) { newUnit in
+            let normalizedAmount: Int
+            switch newUnit {
+            case .minutes:
+                normalizedAmount = min(TaskItem.maximumEstimatedMinutes, max(1, estimatedMinutes))
+                estimatedMinutes = normalizedAmount
+            case .hours:
+                normalizedAmount = min(60, max(1, Int((Double(estimatedMinutes) / 60).rounded())))
+                estimatedMinutes = normalizedAmount * 60
+            }
+        }
+    }
+
+    private var amount: Binding<Int> {
+        Binding(
+            get: {
+                switch unit {
+                case .minutes: return estimatedMinutes
+                case .hours: return min(60, max(1, Int((Double(estimatedMinutes) / 60).rounded())))
+                }
+            },
+            set: { newValue in
+                switch unit {
+                case .minutes:
+                    estimatedMinutes = TaskItem.normalizedEstimatedMinutes(newValue)
+                case .hours:
+                    estimatedMinutes = min(60, max(1, newValue)) * 60
+                }
+            }
+        )
     }
 }
 

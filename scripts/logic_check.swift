@@ -511,12 +511,12 @@ struct LogicCheck {
         focus.pause(now: base.addingTimeInterval(600))
         precondition(Int(focus.elapsed(at: base.addingTimeInterval(800))) == 600)
         focus.resume(now: base.addingTimeInterval(900))
-        precondition(focus.finish(now: base.addingTimeInterval(1_500))?.durationSeconds == 1_200)
+        precondition(focus.finish(now: base.addingTimeInterval(1_500))?.durationSeconds == 600)
 
         let interval = DateInterval(start: base, end: base.addingTimeInterval(2_000))
         precondition(focus.totalSeconds(in: interval) == 1_200)
         let reloaded = FocusStore(databaseURL: databaseURL)
-        precondition(reloaded.sessions.count == 1)
+        precondition(reloaded.sessions.count == 2)
         precondition(reloaded.active == nil)
         precondition(reloaded.totalSeconds(in: interval) == 1_200)
     }

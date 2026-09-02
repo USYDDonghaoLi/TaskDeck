@@ -44,11 +44,22 @@ final class FocusStore: ObservableObject {
     @discardableResult
     func beginOrToggle(_ task: TaskItem, now: Date = Date()) -> Bool {
         if let current = active {
-            guard current.taskID == task.id else { return false }
+            if current.taskID != task.id {
+                guard current.isPaused else { return false }
+                return switchFocus(from: current, to: task, now: now)
+            }
             var updated = current
             if let runningSince = updated.runningSince {
-                updated.accumulatedSeconds += max(0, now.timeIntervalSince(runningSince))
+                let segmentSeconds = max(0, now.timeIntervalSince(runningSince))
+                updated.accumulatedSeconds += segmentSeconds
                 updated.runningSince = nil
+                let session = makeSession(
+                    for: current,
+                    startedAt: runningSince,
+                    endedAt: now,
+                    seconds: segmentSeconds
+                )
+                return persistPause(session, updated: updated, matching: current)
             } else {
                 updated.runningSince = now
             }
@@ -70,9 +81,16 @@ final class FocusStore: ObservableObject {
     func pause(now: Date = Date()) {
         guard let current = active, let runningSince = current.runningSince else { return }
         var updated = current
-        updated.accumulatedSeconds += max(0, now.timeIntervalSince(runningSince))
+        let segmentSeconds = max(0, now.timeIntervalSince(runningSince))
+        updated.accumulatedSeconds += segmentSeconds
         updated.runningSince = nil
-        _ = persistActive(updated, matching: current, reason: "focus-pause")
+        let session = makeSession(
+            for: current,
+            startedAt: runningSince,
+            endedAt: now,
+            seconds: segmentSeconds
+        )
+        _ = persistPause(session, updated: updated, matching: current)
     }
 
     func resume(now: Date = Date()) {
@@ -85,23 +103,15 @@ final class FocusStore: ObservableObject {
     @discardableResult
     func finish(now: Date = Date()) -> FocusSession? {
         guard let active else { return nil }
-        let seconds = Int(elapsed(for: active, at: now).rounded())
-        let session = FocusSession(
-            taskID: active.taskID,
-            taskTitle: active.taskTitle,
-            direction: active.direction,
-            startedAt: active.initiatedAt,
-            endedAt: now,
-            durationSeconds: seconds
-        )
+        let finalSessions = sessionsNeededToFinish(active, now: now)
         guard let database else { return nil }
         do {
-            let changed = try database.finishFocus(session, matching: active)
+            let changed = try database.finishFocus(finalSessions, matching: active)
             try load(from: database)
             persistenceError = nil
             if changed {
                 TaskDeckShared.notifyDataChanged()
-                return session
+                return finalSessions.last
             }
             return nil
         } catch {
@@ -130,7 +140,7 @@ final class FocusStore: ObservableObject {
     }
 
     func sessions(in interval: DateInterval) -> [FocusSession] {
-        sessions.filter { interval.contains($0.endedAt) }.sorted { $0.endedAt > $1.endedAt }
+        sessions.compactMap { $0.clipped(to: interval) }.sorted { $0.endedAt > $1.endedAt }
     }
 
     func totalSeconds(in interval: DateInterval) -> Int {
@@ -140,8 +150,7 @@ final class FocusStore: ObservableObject {
     func seconds(for taskID: UUID, in interval: DateInterval? = nil) -> Int {
         sessions.reduce(0) { result, session in
             guard session.taskID == taskID else { return result }
-            if let interval, !interval.contains(session.endedAt) { return result }
-            return result + session.durationSeconds
+            return result + (interval.map(session.seconds(in:)) ?? session.durationSeconds)
         }
     }
 
@@ -160,6 +169,15 @@ final class FocusStore: ObservableObject {
             persistenceError = error.localizedDescription
             NSLog("TaskDeck could not refresh focus database: %@", error.localizedDescription)
         }
+    }
+
+    func updateActiveTaskDetails(from task: TaskItem) {
+        guard let current = active, current.taskID == task.id else { return }
+        var updated = current
+        updated.taskTitle = task.title
+        updated.direction = task.normalizedDirection
+        updated.estimatedMinutes = task.estimatedMinutes
+        _ = persistActive(updated, matching: current, reason: "focus-task-edit")
     }
 
     private func elapsed(for active: ActiveFocus, at date: Date) -> TimeInterval {
@@ -189,5 +207,96 @@ final class FocusStore: ObservableObject {
             NSLog("TaskDeck could not save focus data: %@", error.localizedDescription)
             return false
         }
+    }
+
+    private func persistPause(
+        _ session: FocusSession?,
+        updated: ActiveFocus,
+        matching expected: ActiveFocus
+    ) -> Bool {
+        guard let database else { return false }
+        do {
+            let changed = try database.pauseFocus(session, active: updated, matching: expected)
+            try load(from: database)
+            persistenceError = nil
+            if changed { TaskDeckShared.notifyDataChanged() }
+            return changed
+        } catch {
+            persistenceError = error.localizedDescription
+            NSLog("TaskDeck could not pause focus data: %@", error.localizedDescription)
+            return false
+        }
+    }
+
+    private func switchFocus(from current: ActiveFocus, to task: TaskItem, now: Date) -> Bool {
+        guard let database else { return false }
+        let newActive = ActiveFocus(
+            taskID: task.id,
+            taskTitle: task.title,
+            direction: task.normalizedDirection,
+            initiatedAt: now,
+            estimatedMinutes: task.estimatedMinutes,
+            runningSince: now,
+            accumulatedSeconds: 0
+        )
+        do {
+            let changed = try database.switchFocus(
+                from: current,
+                finalSessions: sessionsNeededToFinish(current, now: now),
+                to: newActive
+            )
+            try load(from: database)
+            persistenceError = nil
+            if changed { TaskDeckShared.notifyDataChanged() }
+            return changed
+        } catch {
+            persistenceError = error.localizedDescription
+            NSLog("TaskDeck could not switch focus task: %@", error.localizedDescription)
+            return false
+        }
+    }
+
+    private func sessionsNeededToFinish(_ active: ActiveFocus, now: Date) -> [FocusSession] {
+        var result: [FocusSession] = []
+        let alreadyRecorded = sessions.reduce(0) { total, session in
+            guard session.taskID == active.taskID, session.startedAt >= active.initiatedAt else { return total }
+            return total + session.durationSeconds
+        }
+        let unrecorded = max(0, active.accumulatedSeconds - Double(alreadyRecorded))
+        if let legacy = makeSession(
+            for: active,
+            startedAt: active.initiatedAt,
+            endedAt: active.runningSince ?? now,
+            seconds: unrecorded
+        ) {
+            result.append(legacy)
+        }
+        if let runningSince = active.runningSince,
+           let running = makeSession(
+               for: active,
+               startedAt: runningSince,
+               endedAt: now,
+               seconds: max(0, now.timeIntervalSince(runningSince))
+           ) {
+            result.append(running)
+        }
+        return result
+    }
+
+    private func makeSession(
+        for active: ActiveFocus,
+        startedAt: Date,
+        endedAt: Date,
+        seconds: TimeInterval
+    ) -> FocusSession? {
+        guard endedAt > startedAt, seconds >= 0.5 else { return nil }
+        return FocusSession(
+            taskID: active.taskID,
+            taskTitle: active.taskTitle,
+            direction: active.direction,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            durationSeconds: Int(seconds.rounded())
+        )
     }
 }

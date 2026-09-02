@@ -87,6 +87,9 @@ enum TaskRecurrence: String, Codable, CaseIterable, Identifiable, Sendable {
 }
 
 struct TaskItem: Identifiable, Codable, Equatable, Sendable {
+    static let minimumEstimatedMinutes = 1
+    static let maximumEstimatedMinutes = 60 * 60
+
     let id: UUID
     var direction: String
     var title: String
@@ -122,7 +125,7 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.direction = direction.trimmingCharacters(in: .whitespacesAndNewlines)
         self.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         self.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.estimatedMinutes = max(5, estimatedMinutes)
+        self.estimatedMinutes = Self.normalizedEstimatedMinutes(estimatedMinutes)
         self.priority = priority
         self.dueAt = dueAt
         self.reminderEnabled = reminderEnabled && dueAt != nil
@@ -172,7 +175,9 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         notes = try container.decodeIfPresent(String.self, forKey: .notes)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        estimatedMinutes = max(5, try container.decodeIfPresent(Int.self, forKey: .estimatedMinutes) ?? 25)
+        estimatedMinutes = Self.normalizedEstimatedMinutes(
+            try container.decodeIfPresent(Int.self, forKey: .estimatedMinutes) ?? 25
+        )
         priority = try container.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .normal
         dueAt = try container.decodeIfPresent(Date.self, forKey: .dueAt)
         reminderEnabled = (try container.decodeIfPresent(Bool.self, forKey: .reminderEnabled) ?? false) && dueAt != nil
@@ -185,6 +190,10 @@ struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
         subtasks = (try container.decodeIfPresent([Subtask].self, forKey: .subtasks) ?? [])
             .sorted { $0.position < $1.position }
+    }
+
+    static func normalizedEstimatedMinutes(_ value: Int) -> Int {
+        min(maximumEstimatedMinutes, max(minimumEstimatedMinutes, value))
     }
 }
 

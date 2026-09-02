@@ -283,7 +283,10 @@ private final class PDFRenderer {
             guard let completedAt = $0.completedAt else { return false }
             return calendar.isDate(completedAt, inSameDayAs: date)
         }.count
-        let seconds = payload.focusSessions.filter { calendar.isDate($0.endedAt, inSameDayAs: date) }.reduce(0) { $0 + $1.durationSeconds }
+        let start = calendar.startOfDay(for: date)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+        let interval = DateInterval(start: start, end: end)
+        let seconds = payload.focusSessions.reduce(0) { $0 + $1.seconds(in: interval) }
         return min(4, completed + seconds / 1_500)
     }
 

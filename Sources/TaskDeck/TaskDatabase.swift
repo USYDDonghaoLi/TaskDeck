@@ -242,15 +242,54 @@ final class TaskDatabase {
     }
 
     @discardableResult
+    func pauseFocus(
+        _ session: FocusSession?,
+        active updated: ActiveFocus,
+        matching expected: ActiveFocus,
+        reason: String = "focus-pause"
+    ) throws -> Bool {
+        try mutateFocus(reason: reason) { database in
+            guard focusIdentityMatches(try readActiveFocus(database), expected) else { return false }
+            if let session { try insertFocusSession(session, in: database) }
+            try writeActiveFocus(updated, in: database)
+            return true
+        }
+    }
+
+    @discardableResult
     func finishFocus(
         _ session: FocusSession,
         matching expected: ActiveFocus,
         reason: String = "focus-finish"
     ) throws -> Bool {
+        try finishFocus([session], matching: expected, reason: reason)
+    }
+
+    @discardableResult
+    func finishFocus(
+        _ sessions: [FocusSession],
+        matching expected: ActiveFocus,
+        reason: String = "focus-finish"
+    ) throws -> Bool {
         try mutateFocus(reason: reason) { database in
             guard focusIdentityMatches(try readActiveFocus(database), expected) else { return false }
-            try insertFocusSession(session, in: database)
+            for session in sessions { try insertFocusSession(session, in: database) }
             try execute(database, sql: "DELETE FROM focus_runtime WHERE singleton_id = 1")
+            return true
+        }
+    }
+
+    @discardableResult
+    func switchFocus(
+        from expected: ActiveFocus,
+        finalSessions: [FocusSession],
+        to newActive: ActiveFocus,
+        reason: String = "focus-switch"
+    ) throws -> Bool {
+        try mutateFocus(reason: reason) { database in
+            guard focusIdentityMatches(try readActiveFocus(database), expected) else { return false }
+            for session in finalSessions { try insertFocusSession(session, in: database) }
+            try writeActiveFocus(newActive, in: database)
             return true
         }
     }
@@ -262,6 +301,14 @@ final class TaskDatabase {
     ) throws -> Bool {
         try mutateFocus(reason: reason) { database in
             guard focusIdentityMatches(try readActiveFocus(database), expected) else { return false }
+            let deleteSessions = try prepare(database, sql: """
+            DELETE FROM focus_sessions
+            WHERE task_id = ? AND started_at >= ?
+            """)
+            defer { sqlite3_finalize(deleteSessions) }
+            try bind(expected.taskID.uuidString, to: deleteSessions, at: 1, database: database)
+            sqlite3_bind_double(deleteSessions, 2, expected.initiatedAt.timeIntervalSince1970)
+            try stepDone(database, statement: deleteSessions)
             try execute(database, sql: "DELETE FROM focus_runtime WHERE singleton_id = 1")
             return true
         }

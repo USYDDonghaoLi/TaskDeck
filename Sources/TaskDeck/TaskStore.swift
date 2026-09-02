@@ -151,7 +151,7 @@ final class TaskStore: ObservableObject {
         normalized.direction = task.direction.trimmingCharacters(in: .whitespacesAndNewlines)
         normalized.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
         normalized.notes = task.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        normalized.estimatedMinutes = max(5, task.estimatedMinutes)
+        normalized.estimatedMinutes = TaskItem.normalizedEstimatedMinutes(task.estimatedMinutes)
         normalized.reminderEnabled = task.reminderEnabled && task.dueAt != nil
         normalized.recurrence = task.dueAt == nil ? .none : task.recurrence
         normalized.subtasks = normalizedSubtasks(task.subtasks)

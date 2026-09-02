@@ -182,7 +182,7 @@ private struct DesktopTaskRow: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .disabled(focus.active != nil && focus.active?.taskID != task.id)
+            .disabled(focus.active != nil && focus.active?.taskID != task.id && focus.active?.isPaused == false)
             .accessibilityLabel((focus.active?.taskID == task.id
                 ? language.text("暂停或继续专注", "Pause or resume focus")
                 : language.text("开始专注", "Start focus")) + " " + task.title)

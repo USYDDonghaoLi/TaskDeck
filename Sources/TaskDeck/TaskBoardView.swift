@@ -286,27 +286,31 @@ private struct TaskCard: View {
             .help(language.text("编辑名称、时长和优先级", "Edit name, duration, and priority"))
 
             Button {
-                _ = focus.beginOrToggle(task)
+                if task.isCompleted {
+                    toggle()
+                } else {
+                    _ = focus.beginOrToggle(task)
+                }
             } label: {
-                Image(systemName: focusSymbol)
+                Image(systemName: task.isCompleted ? "arrow.uturn.backward" : focusSymbol)
                     .font(.system(size: 10, weight: .black))
-                    .foregroundStyle(isFocused ? DeckTheme.void : DeckTheme.cyan)
+                    .foregroundStyle(isFocused && !task.isCompleted ? DeckTheme.void : DeckTheme.cyan)
                     .frame(width: 28, height: 28)
-                    .background(isFocused ? DeckTheme.cyan : DeckTheme.cyan.opacity(0.08))
+                    .background(isFocused && !task.isCompleted ? DeckTheme.cyan : DeckTheme.cyan.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 7))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(focusActionTitle + " " + task.title)
-            .disabled(task.isCompleted || (focus.active != nil && !isFocused))
-            .opacity(task.isCompleted || (focus.active != nil && !isFocused) ? 0.35 : 1)
-            .help(focusActionTitle)
+            .accessibilityLabel((task.isCompleted ? restoreActionTitle : focusActionTitle) + " " + task.title)
+            .disabled(!task.isCompleted && anotherTaskIsRunning)
+            .opacity(!task.isCompleted && anotherTaskIsRunning ? 0.35 : 1)
+            .help(task.isCompleted ? restoreActionTitle : focusActionTitle)
 
             Menu {
                 Button(language.text("编辑任务", "Edit Task")) { onEdit(task) }
                 Button(task.isCompleted
                     ? language.text("恢复任务", "Restore Task")
                     : language.text("标记完成", "Mark Completed"), action: toggle)
-                if !task.isCompleted && (focus.active == nil || isFocused) {
+                if !task.isCompleted && !anotherTaskIsRunning {
                     Button(focusActionTitle) {
                         _ = focus.beginOrToggle(task)
                     }
@@ -368,16 +372,30 @@ private struct TaskCard: View {
 
     private var isFocused: Bool { focus.active?.taskID == task.id }
 
+    private var anotherTaskIsRunning: Bool {
+        guard let active = focus.active, active.taskID != task.id else { return false }
+        return !active.isPaused
+    }
+
     private var focusSymbol: String {
         guard isFocused else { return "play.fill" }
         return focus.active?.isPaused == true ? "play.fill" : "pause.fill"
     }
 
     private var focusActionTitle: String {
-        guard isFocused else { return language.text("开始专注", "Start Focus") }
+        guard isFocused else {
+            if focus.active?.isPaused == true {
+                return language.text("切换到此任务", "Switch Focus to This Task")
+            }
+            return language.text("开始专注", "Start Focus")
+        }
         return focus.active?.isPaused == true
             ? language.text("继续专注", "Resume Focus")
             : language.text("暂停专注", "Pause Focus")
+    }
+
+    private var restoreActionTitle: String {
+        language.text("恢复为未完成", "Restore as Incomplete")
     }
 
     private func dueText(_ date: Date) -> String {
