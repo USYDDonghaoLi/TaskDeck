@@ -1,0 +1,30 @@
+name: Feature request / 功能建议
+description: Suggest an improvement to TaskDeck.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / 使用问题
+      description: What workflow is difficult today? Use fictional task content.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement / 建议方案
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives / 其他方案
+      description: Optional approaches or trade-offs you considered.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check / 隐私确认
+      options:
+        - label: This request contains no private task data or credentials.
+          required: true

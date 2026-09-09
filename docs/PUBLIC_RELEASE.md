@@ -115,4 +115,6 @@ outputs/releases/TaskDeck-<version>.dmg.sha256
 
 ## 9. 对外发布
 
-公开提供 DMG、SHA-256、更新日志和隐私政策。GitHub 源码仓库可继续保持 Private。发布前不要手动将本机的 SQLite、JSON 导出、证书、API Key 或 `release.env` 放入 DMG。
+公开提供 DMG、SHA-256、更新日志和隐私政策。TaskDeck 的 GitHub 源码仓库已经公开，但发布前仍不得将本机的 SQLite、JSON 导出、自动备份、证书、API Key、`release.env` 或公证凭据加入提交、Release 附件或 DMG。
+
+在 GitHub Releases 创建与版本号对应的标签（例如 `v2.0.0`），并仅上传经过上述流程验证的 DMG、SHA-256 和更新说明。发布后从一台没有开发证书的 Mac 再次下载并完成第 8 节验收。

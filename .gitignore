@@ -11,3 +11,24 @@ scripts/release.env
 scripts/privacy_denylist.txt
 *.xcarchive
 xcuserdata/
+
+# Local user data and exports must never enter the public repository.
+**/taskdeck.sqlite
+**/taskdeck.sqlite3
+**/taskdeck.sqlite3-*
+**/tasks.json
+**/focus-sessions.json
+**/focus-runtime.json
+Backups/
+exports/
+*.taskdeck.json
+
+# Signing, notarization, and local environment secrets.
+*.p12
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.dmg
+.env
+.env.*
+!.env.example

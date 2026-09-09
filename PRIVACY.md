@@ -1,6 +1,6 @@
 # TaskDeck Privacy Policy / 隐私政策
 
-Last updated / 最后更新：2026-09-01
+Last updated / 最后更新：2026-09-09
 
 ## 简体中文
 
@@ -26,6 +26,10 @@ TaskDeck 的主应用和 Widget 通过 Apple App Group 在本机共享同一数�
 
 当前版本的 TaskDeck 本身不向任何 TaskDeck 服务器发送数据。macOS 可能为 Developer ID、公证票据和 Gatekeeper 安全检查访问 Apple 服务；该过程由 Apple 和 macOS 控制。
 
+### 公开源码仓库
+
+公开 GitHub 仓库只包含源码、测试、文档和不含个人信息的演示材料，不包含任何用户数据库、专注记录、备份或 JSON 导出。GitHub Issue 和 Pull Request 是公开内容；提交问题时请勿上传任务导出、数据库、包含私人任务的截图、证书或凭据。敏感问题请按照仓库中的 `SECURITY.md` 私下报告。
+
 ## English
 
 TaskDeck is a local-first macOS task and focus manager.
@@ -36,7 +40,7 @@ TaskDeck does not collect, upload, sell, or share tasks, focus records, reminder
 
 ### Local storage
 
-Tasks, future subtasks, focus history, and active timers are stored in an App Group SQLite database belonging to the current macOS user. Before each modification, TaskDeck creates a local database backup and retains the latest 30 backups.
+Tasks, subtasks, focus history, and active timers are stored in an App Group SQLite database belonging to the current macOS user. Before each modification, TaskDeck creates a local database backup and retains the latest 30 backups.
 
 ### Widget and notifications
 
@@ -49,3 +53,7 @@ TaskDeck creates a JSON archive only when the user explicitly chooses Export JSO
 ### Network access
 
 The current TaskDeck app does not send data to a TaskDeck server. macOS may contact Apple for Developer ID, notarization-ticket, and Gatekeeper security checks; that process is controlled by Apple and macOS.
+
+### Public source repository
+
+The public GitHub repository contains source code, tests, documentation, and privacy-safe demo material only. It does not contain user databases, focus history, backups, or JSON exports. GitHub issues and pull requests are public: never attach a task export, database, screenshot containing private tasks, certificate, or credential. Follow the repository's `SECURITY.md` for sensitive reports.

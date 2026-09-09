@@ -4,6 +4,14 @@ English | [简体中文](README.md)
 
 TaskDeck is a local-first, hacker-inspired native macOS app for task execution and focus tracking. Built with SwiftUI, it brings long-term directions, precise next actions, time estimates, focus sessions, and review reports into one workspace.
 
+## Public Repository
+
+This repository is public to document TaskDeck's design, implementation, and ongoing evolution. It contains source code, tests, documentation, and privacy-safe demo material only. Personal task databases, focus history, JSON exports, automatic backups, signing certificates, and local release configuration are excluded from Git tracking.
+
+- Use [GitHub Issues](https://github.com/USYDDonghaoLi/TaskDeck/issues) for ordinary bugs and feature ideas.
+- Follow [SECURITY.md](SECURITY.md) to report vulnerabilities or possible privacy exposures privately. Do not open a public issue for sensitive reports.
+- Public visibility makes the source viewable; it does not by itself grant permission to copy, modify, distribute, or use the code commercially. No open-source license has been selected yet.
+
 ## Features
 
 - Create tasks with a direction, a precise action, and an estimated duration
@@ -121,4 +129,4 @@ outputs/            User guides, release notes, and sample reports
 
 Current version: TaskDeck 2.0.0 (Build 13).
 
-This is a personal vibe-coding project. The repository is private by default; it can be made public later after reviewing signing, privacy, and release configuration.
+TaskDeck is an actively evolving personal vibe-coding project. The public repository does not include tasks created by its author or users, and automated privacy checks run for every contribution.
