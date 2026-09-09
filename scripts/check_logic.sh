@@ -2,15 +2,25 @@
 set -euo pipefail
 
 PROJECT_ROOT="${0:A:h:h}"
-SDK_PATH="${TASKDECK_SDKROOT:-/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk}"
+SDK_PATH="${TASKDECK_SDKROOT:-}"
 MODULE_CACHE="$PROJECT_ROOT/.build/module-cache"
 CHECK_BINARY="$PROJECT_ROOT/.build/taskdeck-logic-check"
 
+if [[ -z "$SDK_PATH" ]]; then
+    SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
+fi
+SWIFTC_PATH="$(xcrun --find swiftc)"
+HOST_ARCH="$(uname -m)"
+case "$HOST_ARCH" in
+    arm64|x86_64) TARGET_TRIPLE="$HOST_ARCH-apple-macosx13.0" ;;
+    *) print "Unsupported build architecture: $HOST_ARCH"; exit 1 ;;
+esac
+
 mkdir -p "$MODULE_CACHE"
 env SDKROOT="$SDK_PATH" CLANG_MODULE_CACHE_PATH="$MODULE_CACHE" \
-    swiftc \
+    "$SWIFTC_PATH" \
     -sdk "$SDK_PATH" \
-    -target arm64-apple-macosx13.0 \
+    -target "$TARGET_TRIPLE" \
     -module-cache-path "$MODULE_CACHE" \
     "$PROJECT_ROOT/Sources/TaskDeck/Localization.swift" \
     "$PROJECT_ROOT/Sources/TaskDeck/TaskItem.swift" \
