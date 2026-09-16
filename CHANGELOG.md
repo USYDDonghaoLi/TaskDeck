@@ -2,6 +2,16 @@
 
 All notable TaskDeck changes are recorded here. Version numbers follow semantic versioning, while `CFBundleVersion` uses a monotonically increasing integer.
 
+## 2.3.0 (Build 16) - Focus Experience
+
+- Decoupled stopping the timer from completing a task, with stop-only, complete, and switch-next actions plus an optional focus outcome note.
+- Added a searchable task switcher grouped by direction, showing estimates and priorities while remembering recent switches.
+- Added `⌘⌥K` to open the focus switcher and `⌘⌥J` to return to the most recent task.
+- Added optional Pomodoro rounds with custom focus and break lengths, notifications, and opt-in automatic breaks.
+- Added idle detection that pauses on return and asks whether the idle interval should count toward focus reports.
+- Migrated SQLite to schema v3 by adding an optional focus-note column, with an automatic pre-migration backup and backward-compatible JSON archives.
+- Added regression coverage for idle-time inclusion/exclusion and persisted focus outcome notes.
+
 ## 2.2.0 (Build 15) - Focus Task Switcher
 
 - Added a task-switching menu to the top focus HUD with every other pending task.

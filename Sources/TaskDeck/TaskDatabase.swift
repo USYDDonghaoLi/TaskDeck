@@ -262,18 +262,34 @@ final class TaskDatabase {
         matching expected: ActiveFocus,
         reason: String = "focus-finish"
     ) throws -> Bool {
-        try finishFocus([session], matching: expected, reason: reason)
+        try finishFocus([session], matching: expected, note: session.note, reason: reason)
     }
 
     @discardableResult
     func finishFocus(
         _ sessions: [FocusSession],
         matching expected: ActiveFocus,
+        note: String? = nil,
         reason: String = "focus-finish"
     ) throws -> Bool {
         try mutateFocus(reason: reason) { database in
             guard focusIdentityMatches(try readActiveFocus(database), expected) else { return false }
-            for session in sessions { try insertFocusSession(session, in: database) }
+            let normalizedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let savedNote = normalizedNote.flatMap { $0.isEmpty ? nil : $0 }
+            for (index, session) in sessions.enumerated() {
+                let value = index == sessions.indices.last && savedNote != nil
+                    ? session.withNote(savedNote)
+                    : session
+                try insertFocusSession(value, in: database)
+            }
+            if sessions.isEmpty, let savedNote {
+                try attachNoteToLatestSession(
+                    savedNote,
+                    taskID: expected.taskID,
+                    since: expected.initiatedAt,
+                    in: database
+                )
+            }
             try execute(database, sql: "DELETE FROM focus_runtime WHERE singleton_id = 1")
             return true
         }
@@ -435,7 +451,8 @@ final class TaskDatabase {
             direction TEXT NOT NULL,
             started_at REAL NOT NULL,
             ended_at REAL NOT NULL,
-            duration_seconds INTEGER NOT NULL
+            duration_seconds INTEGER NOT NULL,
+            note TEXT
         );
         CREATE INDEX IF NOT EXISTS focus_sessions_task_idx ON focus_sessions(task_id);
         CREATE INDEX IF NOT EXISTS focus_sessions_ended_idx ON focus_sessions(ended_at);
@@ -454,11 +471,19 @@ final class TaskDatabase {
     }
 
     private func migrateSchema(_ database: OpaquePointer) throws {
-        if !(try columnExists("deleted_at", in: "tasks", database: database)) {
+        let needsDeletedAt = !(try columnExists("deleted_at", in: "tasks", database: database))
+        let needsFocusNote = !(try columnExists("note", in: "focus_sessions", database: database))
+        if needsDeletedAt || needsFocusNote {
+            try createBackup(from: database, reason: "before-schema-v3")
+        }
+        if needsDeletedAt {
             try execute(database, sql: "ALTER TABLE tasks ADD COLUMN deleted_at REAL")
         }
+        if needsFocusNote {
+            try execute(database, sql: "ALTER TABLE focus_sessions ADD COLUMN note TEXT")
+        }
         try execute(database, sql: "CREATE INDEX IF NOT EXISTS tasks_deleted_at_idx ON tasks(deleted_at)")
-        try execute(database, sql: "PRAGMA user_version = 2")
+        try execute(database, sql: "PRAGMA user_version = 3")
     }
 
     private func readTasks(_ database: OpaquePointer) throws -> [TaskItem] {
@@ -656,8 +681,11 @@ final class TaskDatabase {
     }
 
     private func readFocusSessions(_ database: OpaquePointer) throws -> [FocusSession] {
+        let noteColumn = (try columnExists("note", in: "focus_sessions", database: database))
+            ? "note"
+            : "NULL AS note"
         let statement = try prepare(database, sql: """
-        SELECT id, task_id, task_title, direction, started_at, ended_at, duration_seconds
+        SELECT id, task_id, task_title, direction, started_at, ended_at, duration_seconds, \(noteColumn)
         FROM focus_sessions ORDER BY ended_at DESC
         """)
         defer { sqlite3_finalize(statement) }
@@ -677,7 +705,8 @@ final class TaskDatabase {
                 direction: text(statement, 3),
                 startedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4)),
                 endedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 5)),
-                durationSeconds: Int(sqlite3_column_int(statement, 6))
+                durationSeconds: Int(sqlite3_column_int(statement, 6)),
+                note: nullableText(statement, 7)
             ))
             result = sqlite3_step(statement)
         }
@@ -730,15 +759,16 @@ final class TaskDatabase {
     private func insertFocusSession(_ session: FocusSession, in database: OpaquePointer) throws {
         let statement = try prepare(database, sql: """
         INSERT INTO focus_sessions (
-            id, task_id, task_title, direction, started_at, ended_at, duration_seconds
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            id, task_id, task_title, direction, started_at, ended_at, duration_seconds, note
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             task_id = excluded.task_id,
             task_title = excluded.task_title,
             direction = excluded.direction,
             started_at = excluded.started_at,
             ended_at = excluded.ended_at,
-            duration_seconds = excluded.duration_seconds
+            duration_seconds = excluded.duration_seconds,
+            note = excluded.note
         """)
         defer { sqlite3_finalize(statement) }
         try bind(session.id.uuidString, to: statement, at: 1, database: database)
@@ -748,6 +778,28 @@ final class TaskDatabase {
         sqlite3_bind_double(statement, 5, session.startedAt.timeIntervalSince1970)
         sqlite3_bind_double(statement, 6, session.endedAt.timeIntervalSince1970)
         sqlite3_bind_int(statement, 7, Int32(session.durationSeconds))
+        try bind(session.note, to: statement, at: 8, database: database)
+        try stepDone(database, statement: statement)
+    }
+
+    private func attachNoteToLatestSession(
+        _ note: String,
+        taskID: UUID,
+        since initiatedAt: Date,
+        in database: OpaquePointer
+    ) throws {
+        let statement = try prepare(database, sql: """
+        UPDATE focus_sessions SET note = ?
+        WHERE id = (
+            SELECT id FROM focus_sessions
+            WHERE task_id = ? AND started_at >= ?
+            ORDER BY ended_at DESC LIMIT 1
+        )
+        """)
+        defer { sqlite3_finalize(statement) }
+        try bind(note, to: statement, at: 1, database: database)
+        try bind(taskID.uuidString, to: statement, at: 2, database: database)
+        sqlite3_bind_double(statement, 3, initiatedAt.timeIntervalSince1970)
         try stepDone(database, statement: statement)
     }
 

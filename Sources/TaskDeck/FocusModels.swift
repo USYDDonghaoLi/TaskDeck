@@ -8,6 +8,7 @@ struct FocusSession: Identifiable, Codable, Equatable, Sendable {
     let startedAt: Date
     let endedAt: Date
     let durationSeconds: Int
+    let note: String?
 
     init(
         id: UUID = UUID(),
@@ -16,7 +17,8 @@ struct FocusSession: Identifiable, Codable, Equatable, Sendable {
         direction: String,
         startedAt: Date,
         endedAt: Date,
-        durationSeconds: Int
+        durationSeconds: Int,
+        note: String? = nil
     ) {
         self.id = id
         self.taskID = taskID
@@ -25,6 +27,8 @@ struct FocusSession: Identifiable, Codable, Equatable, Sendable {
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.durationSeconds = max(1, durationSeconds)
+        let cleanedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.note = cleanedNote.isEmpty ? nil : cleanedNote
     }
 
     /// Returns only the recorded focus time that belongs to `interval`.
@@ -57,12 +61,26 @@ struct FocusSession: Identifiable, Codable, Equatable, Sendable {
             direction: direction,
             startedAt: clippedStart,
             endedAt: clippedEnd,
-            durationSeconds: allocatedSeconds
+            durationSeconds: allocatedSeconds,
+            note: note
         )
     }
 
     func seconds(in interval: DateInterval) -> Int {
         clipped(to: interval)?.durationSeconds ?? 0
+    }
+
+    func withNote(_ note: String?) -> FocusSession {
+        FocusSession(
+            id: id,
+            taskID: taskID,
+            taskTitle: taskTitle,
+            direction: direction,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            durationSeconds: durationSeconds,
+            note: note
+        )
     }
 }
 
@@ -80,4 +98,30 @@ struct ActiveFocus: Codable, Equatable, Sendable {
 
 struct FocusRuntimeState: Codable {
     var active: ActiveFocus?
+}
+
+struct IdleFocusReview: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let taskID: UUID
+    let focusInitiatedAt: Date
+    let startedAt: Date
+    let endedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        taskID: UUID,
+        focusInitiatedAt: Date,
+        startedAt: Date,
+        endedAt: Date
+    ) {
+        self.id = id
+        self.taskID = taskID
+        self.focusInitiatedAt = focusInitiatedAt
+        self.startedAt = startedAt
+        self.endedAt = max(startedAt, endedAt)
+    }
+
+    var durationSeconds: Int {
+        max(0, Int(endedAt.timeIntervalSince(startedAt).rounded()))
+    }
 }

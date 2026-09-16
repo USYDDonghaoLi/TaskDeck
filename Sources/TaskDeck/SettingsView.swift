@@ -6,6 +6,7 @@ struct SettingsView: View {
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var notifications: NotificationManager
     @EnvironmentObject private var focus: FocusStore
+    @EnvironmentObject private var experience: FocusExperienceController
     @EnvironmentObject private var language: LanguageStore
 
     @State private var statusMessage = ""
@@ -22,6 +23,7 @@ struct SettingsView: View {
                     header
                     languagePanel
                     editingPanel
+                    focusExperiencePanel
                     dataPanel
                     trashPanel
                     backupPanel
@@ -58,8 +60,8 @@ struct SettingsView: View {
             Text(language.text("设置", "Settings"))
                 .font(.system(size: 23, weight: .black))
             Text(language.text(
-                "语言、编辑方式与本地数据管理",
-                "Language, editing, and local data management"
+                "语言、专注体验、编辑方式与本地数据管理",
+                "Language, focus experience, editing, and local data management"
             ))
             .font(.system(size: 10))
             .foregroundStyle(DeckTheme.muted)
@@ -97,7 +99,7 @@ struct SettingsView: View {
 
     private var dataPanel: some View {
         settingsPanel(
-            index: "03",
+            index: "04",
             title: language.text("数据与备份", "Data & Backups"),
             subtitle: language.text(
                 "任务、专注记录和 Widget 共用 SQLite。每次修改前保留备份，最多保存最近 30 份。",
@@ -150,7 +152,7 @@ struct SettingsView: View {
 
     private var trashPanel: some View {
         settingsPanel(
-            index: "04",
+            index: "05",
             title: language.text("回收站", "Trash"),
             subtitle: language.text(
                 "删除的任务会保留在这里；恢复不会改变任务 ID、完成记录或专注历史。永久删除仍会先创建数据库备份。",
@@ -202,7 +204,7 @@ struct SettingsView: View {
 
     private var backupPanel: some View {
         settingsPanel(
-            index: "05",
+            index: "06",
             title: language.text("数据库备份", "Database Backups"),
             subtitle: language.text(
                 "只显示 TaskDeck 自动生成的 SQLite 备份。恢复前会校验完整性，并额外保存当前数据库。",
@@ -254,6 +256,108 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var focusExperiencePanel: some View {
+        settingsPanel(
+            index: "03",
+            title: language.text("专注体验", "Focus Experience"),
+            subtitle: language.text(
+                "设置番茄钟、自动休息与闲置检测；这些偏好不会修改已有专注记录。",
+                "Configure Pomodoro rounds, automatic breaks, and idle detection without changing existing focus history."
+            )
+        ) {
+            VStack(alignment: .leading, spacing: 13) {
+                Toggle(language.text("启用番茄钟与完成提醒", "Enable Pomodoro rounds and alerts"), isOn: $experience.pomodoroEnabled)
+                    .toggleStyle(.switch)
+                    .font(.system(size: 9, weight: .bold))
+
+                HStack(spacing: 18) {
+                    focusDurationField(
+                        title: language.text("专注时长", "Focus Length"),
+                        value: $experience.focusMinutes,
+                        range: 1...180
+                    )
+                    focusDurationField(
+                        title: language.text("休息时长", "Break Length"),
+                        value: $experience.breakMinutes,
+                        range: 1...60
+                    )
+                }
+                .disabled(!experience.pomodoroEnabled)
+                .opacity(experience.pomodoroEnabled ? 1 : 0.5)
+
+                Toggle(language.text("完成一轮后自动暂停并开始休息", "Automatically pause and start a break after each round"), isOn: $experience.autoStartBreak)
+                    .toggleStyle(.switch)
+                    .font(.system(size: 9, weight: .bold))
+                    .disabled(!experience.pomodoroEnabled)
+
+                Rectangle().fill(DeckTheme.border).frame(height: 1)
+
+                Toggle(language.text("启用闲置检测", "Enable idle detection"), isOn: $experience.idleDetectionEnabled)
+                    .toggleStyle(.switch)
+                    .font(.system(size: 9, weight: .bold))
+
+                focusDurationField(
+                    title: language.text("连续闲置多久后询问", "Ask after this much idle time"),
+                    value: $experience.idleThresholdMinutes,
+                    range: 1...120
+                )
+                .disabled(!experience.idleDetectionEnabled)
+                .opacity(experience.idleDetectionEnabled ? 1 : 0.5)
+
+                if notifications.authorizationStatus == .denied {
+                    Label(
+                        language.text(
+                            "系统通知权限已关闭；应用内提醒仍然有效。",
+                            "System notifications are disabled; in-app alerts still work."
+                        ),
+                        systemImage: "bell.slash"
+                    )
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(DeckTheme.warning)
+                } else if notifications.authorizationStatus == .notDetermined {
+                    Button {
+                        notifications.requestAuthorization()
+                    } label: {
+                        Label(language.text("允许专注提醒", "Allow Focus Notifications"), systemImage: "bell.badge")
+                            .settingsAction()
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func focusDurationField(
+        title: String,
+        value: Binding<Int>,
+        range: ClosedRange<Int>
+    ) -> some View {
+        HStack(spacing: 9) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title.uppercased())
+                    .font(.system(size: 7, weight: .black))
+                    .foregroundStyle(DeckTheme.muted)
+                HStack(spacing: 5) {
+                    TextField("", value: value, format: .number)
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .font(.system(size: 10, weight: .black))
+                        .frame(width: 44, height: 26)
+                        .padding(.horizontal, 6)
+                        .background(DeckTheme.panelRaised)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(DeckTheme.border))
+                    Text(language.text("分钟", "MIN"))
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(DeckTheme.muted)
+                }
+            }
+            Stepper("", value: value, in: range)
+                .labelsHidden()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func settingsPanel<Content: View>(

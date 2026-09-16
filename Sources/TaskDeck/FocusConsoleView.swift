@@ -1,7 +1,10 @@
 import SwiftUI
 
 struct FocusConsoleView: View {
+    @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var notifications: NotificationManager
     @EnvironmentObject private var focus: FocusStore
+    @EnvironmentObject private var experience: FocusExperienceController
     @EnvironmentObject private var language: LanguageStore
 
     var body: some View {
@@ -54,15 +57,7 @@ struct FocusConsoleView: View {
                                 .foregroundStyle(DeckTheme.muted)
                         }
 
-                        Button(language.text("结束专注", "Finish Focus")) { _ = focus.finish() }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 8, weight: .black))
-                            .foregroundStyle(DeckTheme.text)
-                            .padding(.horizontal, 10)
-                            .frame(height: 30)
-                            .background(DeckTheme.panelRaised)
-                            .clipShape(RoundedRectangle(cornerRadius: 7))
-                            .accessibilityLabel(language.text("结束专注", "Finish focus") + " " + active.taskTitle)
+                        FocusFinishButton(variant: .console)
 
                         Menu {
                             Button(language.text("放弃本次记录", "Discard This Session"), role: .destructive) { focus.discardActive() }
@@ -102,5 +97,198 @@ struct FocusConsoleView: View {
         return hours > 0
             ? String(format: "%02d:%02d:%02d", hours, minutes, remaining)
             : String(format: "%02d:%02d", minutes, remaining)
+    }
+}
+
+enum FocusFinishButtonVariant {
+    case hud
+    case console
+    case desktop
+}
+
+private enum FocusFinishAction: Equatable {
+    case stop
+    case complete
+    case next
+}
+
+struct FocusFinishButton: View {
+    @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var notifications: NotificationManager
+    @EnvironmentObject private var focus: FocusStore
+    @EnvironmentObject private var experience: FocusExperienceController
+    @EnvironmentObject private var language: LanguageStore
+
+    let variant: FocusFinishButtonVariant
+    @State private var isPresented = false
+    @State private var note = ""
+
+    var body: some View {
+        Button { isPresented.toggle() } label: {
+            buttonLabel
+        }
+        .buttonStyle(.plain)
+        .help(language.text("选择如何结束本次专注", "Choose how to finish this focus session"))
+        .accessibilityLabel(language.text("结束专注选项", "Finish focus options"))
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            finishPopover
+        }
+        .onChange(of: focus.active?.taskID) { _ in
+            isPresented = false
+            note = ""
+        }
+    }
+
+    @ViewBuilder
+    private var buttonLabel: some View {
+        switch variant {
+        case .hud:
+            Label(language.text("结束", "Finish"), systemImage: "stop.fill")
+                .font(.system(size: 8, weight: .black))
+                .foregroundStyle(DeckTheme.text)
+                .padding(.horizontal, 11)
+                .frame(height: 34)
+                .background(DeckTheme.panelRaised)
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(DeckTheme.border))
+        case .console:
+            Text(language.text("结束专注", "Finish Focus"))
+                .font(.system(size: 8, weight: .black))
+                .foregroundStyle(DeckTheme.text)
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .background(DeckTheme.panelRaised)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+        case .desktop:
+            Text(language.text("结束", "Finish"))
+                .font(.system(size: 7, weight: .black))
+                .foregroundStyle(DeckTheme.muted)
+        }
+    }
+
+    private var finishPopover: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("FOCUS // WRAP UP")
+                    .font(.system(size: 8, weight: .black))
+                    .tracking(1.1)
+                    .foregroundStyle(DeckTheme.cyan)
+                Text(language.text("结束本次专注", "Finish This Focus Session"))
+                    .font(.system(size: 14, weight: .black))
+                Text(focus.active?.taskTitle ?? "")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(DeckTheme.muted)
+                    .lineLimit(1)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(language.text("本次完成了什么（可选）", "What did you accomplish? (optional)"))
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(DeckTheme.muted)
+                TextField(language.text("用一句话记录成果", "Capture the outcome in one sentence"), text: $note)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 9, weight: .medium))
+                    .padding(.horizontal, 10)
+                    .frame(height: 34)
+                    .background(DeckTheme.panelRaised)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(DeckTheme.border))
+            }
+
+            VStack(spacing: 7) {
+                finishOption(
+                    title: language.text("仅结束专注", "Finish Focus Only"),
+                    detail: language.text("任务仍保持未完成", "Keep the task open"),
+                    symbol: "stop.circle",
+                    color: DeckTheme.cyan,
+                    action: .stop
+                )
+                finishOption(
+                    title: language.text("结束并完成任务", "Finish and Complete Task"),
+                    detail: language.text("勾选任务并保留专注记录", "Complete the task and keep the focus history"),
+                    symbol: "checkmark.circle.fill",
+                    color: DeckTheme.lime,
+                    action: .complete
+                )
+                finishOption(
+                    title: language.text("结束并切换到下一项", "Finish and Start Next"),
+                    detail: nextTask.map { language.text("下一项：", "Next: ") + $0.title }
+                        ?? language.text("没有其他待办任务", "No other pending task"),
+                    symbol: "arrow.right.circle.fill",
+                    color: DeckTheme.warning,
+                    action: .next,
+                    isDisabled: nextTask == nil
+                )
+            }
+        }
+        .padding(16)
+        .frame(width: 380)
+        .background(DeckTheme.void)
+        .foregroundStyle(DeckTheme.text)
+        .fontDesign(.monospaced)
+    }
+
+    private func finishOption(
+        title: String,
+        detail: String,
+        symbol: String,
+        color: Color,
+        action: FocusFinishAction,
+        isDisabled: Bool = false
+    ) -> some View {
+        Button { finish(action) } label: {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(color)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 9, weight: .black))
+                    Text(detail)
+                        .font(.system(size: 7))
+                        .foregroundStyle(DeckTheme.muted)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(DeckTheme.muted)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 46)
+            .background(DeckTheme.panel)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(DeckTheme.border))
+            .opacity(isDisabled ? 0.45 : 1)
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+    }
+
+    private var nextTask: TaskItem? {
+        guard let activeTaskID = focus.active?.taskID else { return nil }
+        return store.pendingTasks.first { $0.id != activeTaskID }
+    }
+
+    private func finish(_ action: FocusFinishAction) {
+        guard let active = focus.active else { return }
+        let currentTask = store.activeTasks.first { $0.id == active.taskID }
+        let followingTask = nextTask
+        _ = focus.finish(note: note)
+        guard focus.active == nil else { return }
+
+        if action == .complete, let currentTask, !currentTask.isCompleted {
+            notifications.cancel(for: currentTask)
+            if let generatedTask = store.toggle(currentTask) {
+                notifications.schedule(for: generatedTask)
+            }
+        } else if action == .next, let followingTask,
+                  focus.beginOrToggle(followingTask) {
+            experience.recordRecentTask(followingTask.id)
+        }
+
+        note = ""
+        isPresented = false
     }
 }

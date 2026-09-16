@@ -6,6 +6,7 @@ extension Notification.Name {
     static let taskDeckFocusSearch = Notification.Name("TaskDeck.command.focusSearch")
     static let taskDeckClearFilters = Notification.Name("TaskDeck.command.clearFilters")
     static let taskDeckOpenDesktop = Notification.Name("TaskDeck.command.openDesktop")
+    static let taskDeckOpenFocusSwitcher = Notification.Name("TaskDeck.command.openFocusSwitcher")
     static let taskDeckSelectFilter = Notification.Name("TaskDeck.command.selectFilter")
 }
 

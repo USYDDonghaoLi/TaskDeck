@@ -187,7 +187,15 @@ struct ReportPanel: View {
             ? "完成 \(report.completedCount) 项｜实际专注 \(durationText(seconds: focusSeconds))｜连续 \(store.completionStreak()) 天｜覆盖 \(report.directionCount) 个方向"
             : "\(report.completedCount) completed | \(durationText(seconds: focusSeconds)) focused | \(store.completionStreak())-day streak | \(report.directionCount) directions"
         let empty = language.text("本周期暂无完成记录。", "No completed tasks in this period.")
-        let body = ([title, "", summary, ""] + (lines.isEmpty ? [empty] : lines)).joined(separator: "\n")
+        let noteLines = focusSessions.compactMap { session -> String? in
+            guard let note = session.note else { return nil }
+            return "- \(formatter.string(from: session.endedAt)) · \(session.taskTitle)：\(note)"
+        }
+        let noteSection = noteLines.isEmpty
+            ? []
+            : ["", language.text("## 专注总结", "## Focus Notes"), ""] + noteLines
+        let body = ([title, "", summary, ""] + (lines.isEmpty ? [empty] : lines) + noteSection)
+            .joined(separator: "\n")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(body, forType: .string)
         copied = true
@@ -390,6 +398,12 @@ private struct FocusLogRow: View {
                 Text(session.endedAt.formatted(date: .omitted, time: .shortened))
                     .font(.system(size: 7))
                     .foregroundStyle(DeckTheme.muted)
+                if let note = session.note {
+                    Text(note)
+                        .font(.system(size: 7, weight: .medium))
+                        .foregroundStyle(DeckTheme.text.opacity(0.82))
+                        .lineLimit(2)
+                }
             }
             Spacer()
             Text("\(max(1, session.durationSeconds / 60))M")

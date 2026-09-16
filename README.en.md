@@ -21,7 +21,10 @@ This repository is public to document TaskDeck's design, implementation, and ong
 - Postpone a task by one hour, until tomorrow, or until next Monday
 - Receive reminders through macOS notifications
 - Start, pause, resume, and finish a focus session for a specific task
-- Show an automatic top-of-screen focus HUD with pause, resume, task switching, and complete-task controls
+- End focus without completing, end and complete, or end and switch to the next task, with an optional outcome note
+- Show an automatic top-of-screen focus HUD with pause, resume, and searchable task switching
+- Optionally enable a Pomodoro timer with custom focus/break lengths, round alerts, and automatic breaks
+- Ask whether returned idle time should count, keeping focus reports accurate
 - Track the current completion streak and a 12-week activity heatmap
 - Generate daily, weekly, and monthly completion and focus summaries
 - Copy a Markdown report or export a polished one-page PDF report
@@ -34,7 +37,7 @@ This repository is public to document TaskDeck's design, implementation, and ong
 - Browse automatic backups, check integrity, and safely restore task and focus data in Settings
 - Search task names, directions, notes, and subtasks globally, then combine priority and date filters
 - Add tasks from the macOS menu bar without opening the main window first
-- Use `⌘N` for new task, `⌘F` for search, `⌘⌥F` to clear filters, `⌘1/2/3` to switch task flows, and `⌘⇧D` for the desktop board
+- Use `⌘N` for new task, `⌘F` for search, `⌘⌥F` to clear filters, `⌘1/2/3` to switch task flows, `⌘⇧D` for the desktop board, `⌘⌥K` for the focus switcher, and `⌘⌥J` for the recent task
 - See bilingual onboarding only on an empty first installation; users with existing tasks are never interrupted
 - Navigate task, subtask, focus, report, filter, composer, sidebar, and desktop-board controls with descriptive VoiceOver labels
 - Run the native XCTest target against isolated temporary databases for core safety and compatibility coverage
@@ -62,7 +65,7 @@ TaskDeck does not upload task content. Starting in 1.5, tasks, focus history, an
 
 Upgrading does not delete existing tasks. On the first 1.5 launch, TaskDeck imports the 1.4 shared `tasks.json` first, then the focus JSON files. It never moves, overwrites, or deletes those originals. JSON import also backs up the current database before replacing data.
 
-Version 1.6 also adds a read-only SQLite migration from the development App Group to a registered production App Group. Tasks, focus history, and an active timer are copied on first launch while the old database remains byte-for-byte untouched. Version 1.7 moves deleted tasks to Trash and adds integrity-checked database restoration. Its migration only adds an optional column and does not delete existing tasks. Version 1.8 activates the already-reserved relational subtask table, so no destructive migration is required. Version 1.9 does not change the database schema; XCTest always uses temporary directories, and onboarding neither reads nor changes tasks. See [PRIVACY.md](PRIVACY.md) for the complete privacy policy.
+Version 1.6 also adds a read-only SQLite migration from the development App Group to a registered production App Group. Tasks, focus history, and an active timer are copied on first launch while the old database remains byte-for-byte untouched. Version 1.7 moves deleted tasks to Trash and adds integrity-checked database restoration. Its migration only adds an optional column and does not delete existing tasks. Version 1.8 activates the already-reserved relational subtask table, so no destructive migration is required. Version 1.9 does not change the database schema; XCTest always uses temporary directories, and onboarding neither reads nor changes tasks. Version 2.3 only adds an optional outcome-note column to focus history and creates a database backup before migrating. Pomodoro, idle-detection, and recent-task preferences stay on the Mac. See [PRIVACY.md](PRIVACY.md) for the complete privacy policy.
 
 ## Requirements
 
@@ -109,11 +112,13 @@ The public pipeline produces an arm64 + x86_64 Universal app, exports with Devel
 1. Unzip `TaskDeck-macOS.zip` and move `TaskDeck.app` into Applications.
 2. On first launch, if macOS displays a security confirmation, right-click the app and choose Open.
 3. Add a precise task and use its play button to start focusing.
-4. Use the pencil on a task card to change its name, estimated duration, or priority.
-5. Open Settings to change language, manage Trash, browse/restore automatic backups, import/export JSON, or reveal the data folder.
-6. Review daily, weekly, or monthly results and export a PDF from the report panel.
-7. Open the desktop board for an always-on-top compact view.
-8. Right-click the desktop, choose Edit Widgets, search for TaskDeck, and pick a small, medium, or large widget.
+4. Use End Focus in the HUD to stop only, complete the task, or switch next, and optionally record an outcome.
+5. Press `⌘⌥K` for the searchable, direction-grouped switcher or `⌘⌥J` to return to a recent task.
+6. Use the pencil on a task card to change its name, estimated duration, or priority.
+7. Open Settings to change language, configure Pomodoro and idle detection, manage Trash, browse/restore automatic backups, import/export JSON, or reveal the data folder.
+8. Review daily, weekly, or monthly results and export a PDF from the report panel.
+9. Open the desktop board for an always-on-top compact view.
+10. Right-click the desktop, choose Edit Widgets, search for TaskDeck, and pick a small, medium, or large widget.
 
 ## Project Layout
 
@@ -128,6 +133,6 @@ outputs/            User guides, release notes, and sample reports
 
 ## Version
 
-Current version: TaskDeck 2.2.0 (Build 15).
+Current version: TaskDeck 2.3.0 (Build 16).
 
 TaskDeck is an actively evolving personal vibe-coding project. The public repository does not include tasks created by its author or users, and automated privacy checks run for every contribution.

@@ -111,12 +111,20 @@ final class FocusStore: ObservableObject {
     }
 
     @discardableResult
-    func finish(now: Date = Date()) -> FocusSession? {
+    func finish(note: String = "", now: Date = Date()) -> FocusSession? {
         guard let active else { return nil }
-        let finalSessions = sessionsNeededToFinish(active, now: now)
+        var finalSessions = sessionsNeededToFinish(active, now: now)
+        let cleanedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanedNote.isEmpty, let lastIndex = finalSessions.indices.last {
+            finalSessions[lastIndex] = finalSessions[lastIndex].withNote(cleanedNote)
+        }
         guard let database else { return nil }
         do {
-            let changed = try database.finishFocus(finalSessions, matching: active)
+            let changed = try database.finishFocus(
+                finalSessions,
+                matching: active,
+                note: cleanedNote.isEmpty ? nil : cleanedNote
+            )
             try load(from: database)
             persistenceError = nil
             if changed {
@@ -129,6 +137,51 @@ final class FocusStore: ObservableObject {
             NSLog("TaskDeck could not finish focus data: %@", error.localizedDescription)
             return nil
         }
+    }
+
+    @discardableResult
+    func pauseForIdleReview(idleStartedAt: Date, now: Date = Date()) -> IdleFocusReview? {
+        guard let current = active, let runningSince = current.runningSince else { return nil }
+        let idleStart = min(now, max(runningSince, idleStartedAt))
+        guard now > idleStart else { return nil }
+
+        var updated = current
+        let focusedSeconds = max(0, idleStart.timeIntervalSince(runningSince))
+        updated.accumulatedSeconds += focusedSeconds
+        updated.runningSince = nil
+        let focusedSession = makeSession(
+            for: current,
+            startedAt: runningSince,
+            endedAt: idleStart,
+            seconds: focusedSeconds
+        )
+        guard persistPause(focusedSession, updated: updated, matching: current) else { return nil }
+        return IdleFocusReview(
+            taskID: current.taskID,
+            focusInitiatedAt: current.initiatedAt,
+            startedAt: idleStart,
+            endedAt: now
+        )
+    }
+
+    @discardableResult
+    func includeIdleReview(_ review: IdleFocusReview) -> Bool {
+        guard let current = active,
+              current.taskID == review.taskID,
+              abs(current.initiatedAt.timeIntervalSince(review.focusInitiatedAt)) < 0.000_001,
+              current.isPaused,
+              review.durationSeconds > 0 else { return false }
+        var updated = current
+        updated.accumulatedSeconds += Double(review.durationSeconds)
+        let session = FocusSession(
+            taskID: current.taskID,
+            taskTitle: current.taskTitle,
+            direction: current.direction,
+            startedAt: review.startedAt,
+            endedAt: review.endedAt,
+            durationSeconds: review.durationSeconds
+        )
+        return persistPause(session, updated: updated, matching: current)
     }
 
     func discardActive() {

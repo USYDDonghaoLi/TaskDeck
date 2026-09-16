@@ -237,11 +237,7 @@ private struct DesktopFocusStrip: View {
                     Text(format(Int(focus.elapsed(at: context.date))))
                         .font(.system(size: 13, weight: .black))
                         .monospacedDigit()
-                    Button(language.text("结束", "Finish")) { _ = focus.finish() }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 7, weight: .black))
-                        .foregroundStyle(DeckTheme.muted)
-                        .accessibilityLabel(language.text("结束专注", "Finish focus") + " " + active.taskTitle)
+                    FocusFinishButton(variant: .desktop)
                 }
                 .padding(.horizontal, 17)
                 .frame(height: 46)

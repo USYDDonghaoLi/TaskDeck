@@ -413,7 +413,7 @@ struct LogicCheck {
             at: databaseURL,
             sql: "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name = 'deleted_at'"
         )
-        precondition(schemaVersion == 2)
+        precondition(schemaVersion == 3)
         precondition(deletedColumnCount == 1)
     }
 
@@ -494,7 +494,7 @@ struct LogicCheck {
         guard case let .archive(archive) = try TaskDeckArchiveCodec.decode(archiveData) else {
             preconditionFailure("Expected TaskDeck archive")
         }
-        precondition(archive.schemaVersion == 4)
+        precondition(archive.schemaVersion == 5)
         precondition(archive.tasks.first(where: { $0.id == overdue.id })?.subtasks.count == 2)
     }
 
@@ -579,15 +579,16 @@ struct LogicCheck {
         )
         let base = Date(timeIntervalSince1970: 1_788_300_000)
         precondition(sourceFocus.beginOrToggle(task, now: base))
-        _ = sourceFocus.finish(now: base.addingTimeInterval(300))
+        _ = sourceFocus.finish(note: "完成归档验证", now: base.addingTimeInterval(300))
         let archiveData = try sourceTasks.exportArchive(focusStore: sourceFocus)
 
         guard case let .archive(decoded) = try TaskDeckArchiveCodec.decode(archiveData) else {
             preconditionFailure("Expected a complete TaskDeck archive")
         }
-        precondition(decoded.schemaVersion == 4)
+        precondition(decoded.schemaVersion == 5)
         precondition(decoded.tasks.count == 1)
         precondition(decoded.focusSessions.count == 1)
+        precondition(decoded.focusSessions.first?.note == "完成归档验证")
 
         let targetTasks = TaskStore(databaseURL: targetURL)
         let targetFocus = FocusStore(databaseURL: targetURL)

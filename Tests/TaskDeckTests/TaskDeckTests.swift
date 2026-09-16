@@ -330,6 +330,71 @@ final class TaskDeckTests: XCTestCase {
     }
 
     @MainActor
+    func testFocusSummaryPersistsWhenFinishingRunningOrPaused() throws {
+        try withTemporaryDatabase { databaseURL in
+            let tasks = TaskStore(databaseURL: databaseURL)
+            let focus = FocusStore(databaseURL: databaseURL)
+            let task = tasks.add(
+                direction: "Writing",
+                title: "Capture an outcome",
+                estimatedMinutes: 25,
+                dueAt: nil,
+                reminderEnabled: false
+            )
+            let start = Date(timeIntervalSince1970: 1_830_000_000)
+
+            XCTAssertTrue(focus.beginOrToggle(task, now: start))
+            XCTAssertNotNil(focus.finish(note: "Drafted the first section", now: start.addingTimeInterval(90)))
+            XCTAssertEqual(FocusStore(databaseURL: databaseURL).sessions.first?.note, "Drafted the first section")
+
+            XCTAssertTrue(focus.beginOrToggle(task, now: start.addingTimeInterval(200)))
+            focus.pause(now: start.addingTimeInterval(260))
+            XCTAssertNil(focus.finish(note: "Reviewed the draft", now: start.addingTimeInterval(300)))
+
+            let reopened = FocusStore(databaseURL: databaseURL)
+            XCTAssertEqual(reopened.sessions.count, 2)
+            XCTAssertEqual(reopened.sessions.first?.note, "Reviewed the draft")
+            XCTAssertEqual(reopened.sessions.last?.note, "Drafted the first section")
+        }
+    }
+
+    @MainActor
+    func testIdleReviewCanExcludeOrIncludeIdleTimeWithoutLosingFocusedTime() throws {
+        try withTemporaryDatabase { databaseURL in
+            let tasks = TaskStore(databaseURL: databaseURL)
+            let focus = FocusStore(databaseURL: databaseURL)
+            let task = tasks.add(
+                direction: "Research",
+                title: "Review idle accounting",
+                estimatedMinutes: 25,
+                dueAt: nil,
+                reminderEnabled: false
+            )
+            let start = Date(timeIntervalSince1970: 1_840_000_000)
+
+            XCTAssertTrue(focus.beginOrToggle(task, now: start))
+            let excluded = try XCTUnwrap(focus.pauseForIdleReview(
+                idleStartedAt: start.addingTimeInterval(60),
+                now: start.addingTimeInterval(360)
+            ))
+            XCTAssertEqual(excluded.durationSeconds, 300)
+            XCTAssertEqual(focus.seconds(for: task.id), 60)
+            focus.resume(now: start.addingTimeInterval(360))
+            focus.pause(now: start.addingTimeInterval(420))
+            XCTAssertEqual(focus.seconds(for: task.id), 120)
+            _ = focus.finish(now: start.addingTimeInterval(430))
+
+            XCTAssertTrue(focus.beginOrToggle(task, now: start.addingTimeInterval(500)))
+            let included = try XCTUnwrap(focus.pauseForIdleReview(
+                idleStartedAt: start.addingTimeInterval(560),
+                now: start.addingTimeInterval(860)
+            ))
+            XCTAssertTrue(focus.includeIdleReview(included))
+            XCTAssertEqual(focus.seconds(for: task.id), 480)
+        }
+    }
+
+    @MainActor
     func testRestoringCompletedTaskPreservesTaskAndFocusHistory() throws {
         try withTemporaryDatabase { databaseURL in
             let store = TaskStore(databaseURL: databaseURL)
