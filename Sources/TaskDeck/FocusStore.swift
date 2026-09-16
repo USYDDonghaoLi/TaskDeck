@@ -78,6 +78,16 @@ final class FocusStore: ObservableObject {
         return persistActive(started, matching: nil, reason: "focus-start")
     }
 
+    @discardableResult
+    func switchTo(_ task: TaskItem, now: Date = Date()) -> Bool {
+        guard !task.isCompleted, !task.isDeleted else { return false }
+        guard let current = active else {
+            return beginOrToggle(task, now: now)
+        }
+        guard current.taskID != task.id else { return true }
+        return switchFocus(from: current, to: task, now: now)
+    }
+
     func pause(now: Date = Date()) {
         guard let current = active, let runningSince = current.runningSince else { return }
         var updated = current

@@ -292,6 +292,44 @@ final class TaskDeckTests: XCTestCase {
     }
 
     @MainActor
+    func testRunningFocusCanSwitchTasksAndKeepSeparateSegments() throws {
+        try withTemporaryDatabase { databaseURL in
+            let tasks = TaskStore(databaseURL: databaseURL)
+            let focus = FocusStore(databaseURL: databaseURL)
+            let first = tasks.add(
+                direction: "Build",
+                title: "First running task",
+                estimatedMinutes: 25,
+                dueAt: nil,
+                reminderEnabled: false
+            )
+            let second = tasks.add(
+                direction: "Review",
+                title: "Second running task",
+                estimatedMinutes: 45,
+                dueAt: nil,
+                reminderEnabled: false
+            )
+            let start = Date(timeIntervalSince1970: 1_820_000_000)
+
+            XCTAssertTrue(focus.beginOrToggle(first, now: start))
+            XCTAssertTrue(focus.switchTo(second, now: start.addingTimeInterval(75)))
+            XCTAssertEqual(focus.active?.taskID, second.id)
+            XCTAssertFalse(focus.active?.isPaused == true)
+            XCTAssertEqual(focus.seconds(for: first.id), 75)
+
+            focus.pause(now: start.addingTimeInterval(195))
+            XCTAssertEqual(focus.seconds(for: second.id), 120)
+
+            let reopened = FocusStore(databaseURL: databaseURL)
+            XCTAssertEqual(reopened.active?.taskID, second.id)
+            XCTAssertTrue(reopened.active?.isPaused == true)
+            XCTAssertEqual(reopened.seconds(for: first.id), 75)
+            XCTAssertEqual(reopened.seconds(for: second.id), 120)
+        }
+    }
+
+    @MainActor
     func testRestoringCompletedTaskPreservesTaskAndFocusHistory() throws {
         try withTemporaryDatabase { databaseURL in
             let store = TaskStore(databaseURL: databaseURL)

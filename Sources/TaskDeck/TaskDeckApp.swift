@@ -276,7 +276,7 @@ private final class FocusHUDController: ObservableObject {
     }
 
     private func makePanel() -> FocusHUDPanel {
-        let size = NSSize(width: 520, height: 78)
+        let size = NSSize(width: 566, height: 78)
         let panel = FocusHUDPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -343,6 +343,7 @@ private final class FocusHUDPanel: NSPanel {
 }
 
 private struct FocusHUDView: View {
+    @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var focus: FocusStore
     @EnvironmentObject private var language: LanguageStore
     let onCompleteTask: () -> Void
@@ -395,6 +396,39 @@ private struct FocusHUDView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
 
+                        Menu {
+                            if switchableTasks.isEmpty {
+                                Text(language.text("没有其他待办任务", "No other pending tasks"))
+                            } else {
+                                ForEach(switchableTasks) { task in
+                                    Button {
+                                        _ = focus.switchTo(task)
+                                    } label: {
+                                        Label(
+                                            "\(task.title) · \(task.displayDirection(in: language.current))",
+                                            systemImage: task.priority.symbol
+                                        )
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "arrow.left.arrow.right")
+                                .font(.system(size: 10, weight: .black))
+                                .foregroundStyle(DeckTheme.cyan)
+                                .frame(width: 34, height: 34)
+                                .background(DeckTheme.cyan.opacity(0.10))
+                                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                        .stroke(DeckTheme.cyan.opacity(0.22), lineWidth: 1)
+                                )
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help(language.text("切换专注任务", "Switch focus task"))
+                        .accessibilityLabel(language.text("打开任务切换菜单", "Open task switcher"))
+
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(formatDuration(Int(elapsed)))
                                 .font(.system(size: 17, weight: .black))
@@ -446,6 +480,11 @@ private struct FocusHUDView: View {
 
     private func displayDirection(_ direction: String) -> String {
         direction == "未分类" ? language.text("未分类", "Uncategorized") : direction
+    }
+
+    private var switchableTasks: [TaskItem] {
+        guard let activeTaskID = focus.active?.taskID else { return [] }
+        return store.pendingTasks.filter { $0.id != activeTaskID }
     }
 
     private func progress(_ elapsed: TimeInterval, targetMinutes: Int) -> Double {

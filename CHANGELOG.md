@@ -2,6 +2,14 @@
 
 All notable TaskDeck changes are recorded here. Version numbers follow semantic versioning, while `CFBundleVersion` uses a monotonically increasing integer.
 
+## 2.2.0 (Build 15) - Focus Task Switcher
+
+- Added a task-switching menu to the top focus HUD with every other pending task.
+- Allowed switching directly while the current timer is running or paused.
+- Saved the current task's elapsed segment transactionally before starting the selected task.
+- Displayed each target task's title, direction, and priority with bilingual help and VoiceOver labels.
+- Added regression coverage proving that both tasks retain their separate focus durations after reopening the database.
+
 ## 2.1.0 (Build 14) - Top Focus HUD
 
 - Added an automatic top-center floating focus controller that stays visible across macOS Spaces and full-screen apps.
