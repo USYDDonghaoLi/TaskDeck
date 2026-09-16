@@ -1,11 +1,34 @@
+import AppKit
+import Combine
 import SwiftUI
 
 @main
+@MainActor
 struct TaskDeckApp: App {
-    @StateObject private var store = TaskStore()
-    @StateObject private var notifications = NotificationManager()
-    @StateObject private var focus = FocusStore()
-    @StateObject private var language = LanguageStore()
+    @StateObject private var store: TaskStore
+    @StateObject private var notifications: NotificationManager
+    @StateObject private var focus: FocusStore
+    @StateObject private var language: LanguageStore
+    @StateObject private var focusHUD: FocusHUDController
+
+    init() {
+        let store = TaskStore()
+        let notifications = NotificationManager()
+        let focus = FocusStore()
+        let language = LanguageStore()
+        _store = StateObject(wrappedValue: store)
+        _notifications = StateObject(wrappedValue: notifications)
+        _focus = StateObject(wrappedValue: focus)
+        _language = StateObject(wrappedValue: language)
+        _focusHUD = StateObject(
+            wrappedValue: FocusHUDController(
+                store: store,
+                notifications: notifications,
+                focus: focus,
+                language: language
+            )
+        )
+    }
 
     var body: some Scene {
         WindowGroup("TaskDeck") {
@@ -200,5 +223,241 @@ private extension View {
             .background(DeckTheme.panelRaised)
             .clipShape(RoundedRectangle(cornerRadius: 7))
             .overlay(RoundedRectangle(cornerRadius: 7).stroke(DeckTheme.border))
+    }
+}
+
+@MainActor
+private final class FocusHUDController: ObservableObject {
+    private let store: TaskStore
+    private let notifications: NotificationManager
+    private let focus: FocusStore
+    private let language: LanguageStore
+    private var panel: FocusHUDPanel?
+    private var cancellables: Set<AnyCancellable> = []
+
+    init(
+        store: TaskStore,
+        notifications: NotificationManager,
+        focus: FocusStore,
+        language: LanguageStore
+    ) {
+        self.store = store
+        self.notifications = notifications
+        self.focus = focus
+        self.language = language
+
+        focus.$active
+            .receive(on: RunLoop.main)
+            .sink { [weak self] active in
+                let hasActiveFocus = active != nil
+                Task { @MainActor [weak self] in
+                    self?.synchronizeVisibility(hasActiveFocus: hasActiveFocus)
+                }
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.positionPanel()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func synchronizeVisibility(hasActiveFocus: Bool) {
+        if hasActiveFocus {
+            let panel = panel ?? makePanel()
+            self.panel = panel
+            positionPanel()
+            panel.orderFrontRegardless()
+        } else {
+            panel?.orderOut(nil)
+        }
+    }
+
+    private func makePanel() -> FocusHUDPanel {
+        let size = NSSize(width: 520, height: 78)
+        let panel = FocusHUDPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .statusBar
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        panel.hidesOnDeactivate = false
+        panel.isFloatingPanel = true
+        panel.isMovableByWindowBackground = true
+        panel.isReleasedWhenClosed = false
+        panel.isExcludedFromWindowsMenu = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.animationBehavior = .utilityWindow
+        panel.setAccessibilityLabel(language.text("专注悬浮控制条", "Focus floating controls"))
+
+        let content = FocusHUDView(onCompleteTask: { [weak self] in
+            self?.completeActiveTask()
+        })
+        .environmentObject(store)
+        .environmentObject(notifications)
+        .environmentObject(focus)
+        .environmentObject(language)
+        .environment(\.locale, language.current.locale)
+
+        let hostingView = NSHostingView(rootView: content)
+        hostingView.frame = NSRect(origin: .zero, size: size)
+        panel.contentView = hostingView
+        return panel
+    }
+
+    private func positionPanel() {
+        guard let panel, panel.isVisible || focus.active != nil else { return }
+        let mouseLocation = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        guard let visibleFrame = screen?.visibleFrame else { return }
+        let origin = NSPoint(
+            x: visibleFrame.midX - panel.frame.width / 2,
+            y: visibleFrame.maxY - panel.frame.height - 10
+        )
+        panel.setFrameOrigin(origin)
+    }
+
+    private func completeActiveTask() {
+        guard let active = focus.active else { return }
+        let task = store.activeTasks.first { $0.id == active.taskID }
+        _ = focus.finish()
+        guard focus.active == nil, let task, !task.isCompleted else { return }
+        notifications.cancel(for: task)
+        if let generatedTask = store.toggle(task) {
+            notifications.schedule(for: generatedTask)
+        }
+    }
+}
+
+private final class FocusHUDPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
+private struct FocusHUDView: View {
+    @EnvironmentObject private var focus: FocusStore
+    @EnvironmentObject private var language: LanguageStore
+    let onCompleteTask: () -> Void
+
+    var body: some View {
+        if let active = focus.active {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let elapsed = focus.elapsed(at: context.date)
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        Button {
+                            active.isPaused ? focus.resume() : focus.pause()
+                        } label: {
+                            Image(systemName: active.isPaused ? "play.fill" : "pause.fill")
+                                .font(.system(size: 11, weight: .black))
+                                .foregroundStyle(DeckTheme.void)
+                                .frame(width: 34, height: 34)
+                                .background(active.isPaused ? DeckTheme.lime : DeckTheme.cyan)
+                                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .help(active.isPaused
+                            ? language.text("继续专注", "Resume focus")
+                            : language.text("暂停专注", "Pause focus"))
+                        .accessibilityLabel(active.isPaused
+                            ? language.text("继续专注", "Resume focus")
+                            : language.text("暂停专注", "Pause focus"))
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(active.isPaused ? DeckTheme.lime : DeckTheme.cyan)
+                                    .frame(width: 6, height: 6)
+                                    .shadow(color: active.isPaused ? DeckTheme.lime : DeckTheme.cyan, radius: 4)
+                                Text(active.isPaused
+                                    ? language.text("专注已暂停", "FOCUS PAUSED")
+                                    : language.text("专注进行中", "FOCUS ACTIVE"))
+                                    .font(.system(size: 7, weight: .black))
+                                    .tracking(0.9)
+                                    .foregroundStyle(active.isPaused ? DeckTheme.lime : DeckTheme.cyan)
+                                Text("// \(displayDirection(active.direction).uppercased())")
+                                    .font(.system(size: 7, weight: .bold))
+                                    .foregroundStyle(DeckTheme.muted)
+                                    .lineLimit(1)
+                            }
+                            Text(active.taskTitle)
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(DeckTheme.text)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(formatDuration(Int(elapsed)))
+                                .font(.system(size: 17, weight: .black))
+                                .foregroundStyle(DeckTheme.text)
+                                .monospacedDigit()
+                            Text(language.format("目标 %d 分钟", "TARGET %d MIN", active.estimatedMinutes))
+                                .font(.system(size: 6, weight: .bold))
+                                .foregroundStyle(DeckTheme.muted)
+                        }
+
+                        Button(action: onCompleteTask) {
+                            Label(language.text("完成任务", "Complete"), systemImage: "checkmark")
+                                .font(.system(size: 8, weight: .black))
+                                .foregroundStyle(DeckTheme.void)
+                                .padding(.horizontal, 11)
+                                .frame(height: 34)
+                                .background(DeckTheme.lime)
+                                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .help(language.text("结束专注并完成任务", "Finish focus and complete task"))
+                        .accessibilityLabel(language.text("结束专注并完成任务", "Finish focus and complete task") + " " + active.taskTitle)
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 72)
+
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            Rectangle().fill(DeckTheme.panelRaised)
+                            Rectangle()
+                                .fill(elapsed >= Double(active.estimatedMinutes * 60) ? DeckTheme.lime : DeckTheme.cyan)
+                                .frame(width: geometry.size.width * progress(elapsed, targetMinutes: active.estimatedMinutes))
+                        }
+                    }
+                    .frame(height: 2)
+                }
+                .background(DeckTheme.void.opacity(0.97))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(active.isPaused ? DeckTheme.lime.opacity(0.28) : DeckTheme.cyan.opacity(0.28), lineWidth: 1)
+                )
+                .padding(2)
+            }
+        } else {
+            Color.clear
+        }
+    }
+
+    private func displayDirection(_ direction: String) -> String {
+        direction == "未分类" ? language.text("未分类", "Uncategorized") : direction
+    }
+
+    private func progress(_ elapsed: TimeInterval, targetMinutes: Int) -> Double {
+        min(1, elapsed / Double(max(60, targetMinutes * 60)))
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        let hours = seconds / 3_600
+        let minutes = (seconds % 3_600) / 60
+        let remaining = seconds % 60
+        return hours > 0
+            ? String(format: "%02d:%02d:%02d", hours, minutes, remaining)
+            : String(format: "%02d:%02d", minutes, remaining)
     }
 }

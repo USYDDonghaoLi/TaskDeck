@@ -2,6 +2,14 @@
 
 All notable TaskDeck changes are recorded here. Version numbers follow semantic versioning, while `CFBundleVersion` uses a monotonically increasing integer.
 
+## 2.1.0 (Build 14) - Top Focus HUD
+
+- Added an automatic top-center floating focus controller that stays visible across macOS Spaces and full-screen apps.
+- Displayed the current task, direction, elapsed time, target duration, paused state, and progress without reopening TaskDeck.
+- Added one-click pause/resume and a complete-task action that safely finishes the current focus segment before completing the task.
+- Preserved recurring-task generation, reminders, focus history, and the existing SQLite schema.
+- Added bilingual labels, tooltips, and VoiceOver descriptions for the new controls.
+
 ## 2.0.0 (Build 13) - Flexible Focus Workflow
 
 - Saved every paused focus interval as an independent segment and allowed switching to another task after pausing.

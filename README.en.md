@@ -21,6 +21,7 @@ This repository is public to document TaskDeck's design, implementation, and ong
 - Postpone a task by one hour, until tomorrow, or until next Monday
 - Receive reminders through macOS notifications
 - Start, pause, resume, and finish a focus session for a specific task
+- Show an automatic top-of-screen focus HUD with pause, resume, and complete-task controls
 - Track the current completion streak and a 12-week activity heatmap
 - Generate daily, weekly, and monthly completion and focus summaries
 - Copy a Markdown report or export a polished one-page PDF report
@@ -127,6 +128,6 @@ outputs/            User guides, release notes, and sample reports
 
 ## Version
 
-Current version: TaskDeck 2.0.0 (Build 13).
+Current version: TaskDeck 2.1.0 (Build 14).
 
 TaskDeck is an actively evolving personal vibe-coding project. The public repository does not include tasks created by its author or users, and automated privacy checks run for every contribution.

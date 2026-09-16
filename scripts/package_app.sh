@@ -2,18 +2,22 @@
 set -euo pipefail
 
 PROJECT_ROOT="${0:A:h:h}"
-SDK_PATH="${TASKDECK_SDKROOT:-/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk}"
+SDK_PATH="${TASKDECK_SDKROOT:-}"
 BUILD_CACHE="$PROJECT_ROOT/.build/cache"
 MODULE_CACHE="$PROJECT_ROOT/.build/module-cache"
-OUTPUT_DIR="$PROJECT_ROOT/outputs"
+OUTPUT_DIR="${TASKDECK_OUTPUT_DIR:-$PROJECT_ROOT/outputs}"
 APP_BUNDLE="$OUTPUT_DIR/TaskDeck.app"
 ZIP_FILE="$OUTPUT_DIR/TaskDeck-macOS.zip"
 WIDGET_BUNDLE="$APP_BUNDLE/Contents/PlugIns/TaskDeckWidget.appex"
-APP_VERSION="${TASKDECK_VERSION:-2.0.0}"
-BUILD_NUMBER="${TASKDECK_BUILD_NUMBER:-13}"
+APP_VERSION="${TASKDECK_VERSION:-2.1.0}"
+BUILD_NUMBER="${TASKDECK_BUILD_NUMBER:-14}"
 APP_BUNDLE_IDENTIFIER="${TASKDECK_APP_BUNDLE_IDENTIFIER:-local.taskdeck.macos}"
 WIDGET_BUNDLE_IDENTIFIER="${TASKDECK_WIDGET_BUNDLE_IDENTIFIER:-local.taskdeck.macos.widget}"
 APP_GROUP_IDENTIFIER="${TASKDECK_APP_GROUP_IDENTIFIER:-group.local.taskdeck.shared}"
+
+if [[ -z "$SDK_PATH" ]]; then
+    SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
+fi
 
 mkdir -p "$BUILD_CACHE" "$MODULE_CACHE" "$OUTPUT_DIR"
 

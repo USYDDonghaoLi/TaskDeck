@@ -2,6 +2,33 @@ import XCTest
 
 final class TaskDeckTests: XCTestCase {
     @MainActor
+    func testFocusHUDCompletionWorkflowPersistsFocusAndCompletesTask() throws {
+        try withTemporaryDatabase { databaseURL in
+            let store = TaskStore(databaseURL: databaseURL)
+            let focus = FocusStore(databaseURL: databaseURL)
+            let task = store.add(
+                direction: "Deep Work",
+                title: "Complete from floating controls",
+                estimatedMinutes: 25,
+                dueAt: nil,
+                reminderEnabled: false
+            )
+            let startedAt = Date(timeIntervalSince1970: 1_810_000_000)
+
+            XCTAssertTrue(focus.beginOrToggle(task, now: startedAt))
+            XCTAssertNotNil(focus.finish(now: startedAt.addingTimeInterval(90)))
+            XCTAssertNil(focus.active)
+            XCTAssertNil(store.toggle(task))
+
+            let reopenedStore = TaskStore(databaseURL: databaseURL)
+            let reopenedFocus = FocusStore(databaseURL: databaseURL)
+            XCTAssertTrue(reopenedStore.tasks.first?.isCompleted == true)
+            XCTAssertEqual(reopenedFocus.sessions.first?.taskID, task.id)
+            XCTAssertEqual(reopenedFocus.sessions.first?.durationSeconds, 90)
+        }
+    }
+
+    @MainActor
     func testTaskLifecyclePersistsWithoutTouchingUserData() throws {
         try withTemporaryDatabase { databaseURL in
             let store = TaskStore(databaseURL: databaseURL)
