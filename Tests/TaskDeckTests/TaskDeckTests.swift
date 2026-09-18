@@ -29,6 +29,42 @@ final class TaskDeckTests: XCTestCase {
     }
 
     @MainActor
+    func testFocusHUDVisibilityModeDefaultsAndPersists() throws {
+        try withTemporaryDatabase { databaseURL in
+            let suiteName = "TaskDeckHUDModeXCTest-\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+            defer { defaults.removePersistentDomain(forName: suiteName) }
+
+            let focus = FocusStore(databaseURL: databaseURL)
+            let notifications = NotificationManager(refreshesStatus: false)
+            let language = LanguageStore(defaults: defaults, syncsSharedDefaults: false)
+            let experience = FocusExperienceController(
+                focus: focus,
+                notifications: notifications,
+                language: language,
+                defaults: defaults,
+                startsTimer: false
+            )
+
+            XCTAssertEqual(experience.hudVisibilityMode, .always)
+            experience.hudVisibilityMode = .onHover
+            XCTAssertEqual(
+                defaults.string(forKey: "TaskDeck.focus.hudVisibilityMode"),
+                FocusHUDVisibilityMode.onHover.rawValue
+            )
+
+            let reopened = FocusExperienceController(
+                focus: FocusStore(databaseURL: databaseURL),
+                notifications: notifications,
+                language: language,
+                defaults: defaults,
+                startsTimer: false
+            )
+            XCTAssertEqual(reopened.hudVisibilityMode, .onHover)
+        }
+    }
+
+    @MainActor
     func testTaskLifecyclePersistsWithoutTouchingUserData() throws {
         try withTemporaryDatabase { databaseURL in
             let store = TaskStore(databaseURL: databaseURL)

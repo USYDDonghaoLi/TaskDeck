@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import QuartzCore
 import SwiftUI
 
 @main
@@ -260,11 +261,14 @@ private extension View {
 
 @MainActor
 private final class FocusHUDController: ObservableObject {
+    private let expandedSize = NSSize(width: 640, height: 82)
+    private let collapsedSize = NSSize(width: 240, height: 20)
     private let store: TaskStore
     private let notifications: NotificationManager
     private let focus: FocusStore
     private let language: LanguageStore
     private let experience: FocusExperienceController
+    private let presentation = FocusHUDPresentationState()
     private var panel: FocusHUDPanel?
     private var cancellables: Set<AnyCancellable> = []
 
@@ -280,38 +284,54 @@ private final class FocusHUDController: ObservableObject {
         self.focus = focus
         self.language = language
         self.experience = experience
+        presentation.apply(mode: experience.hudVisibilityMode)
 
         focus.$active
             .receive(on: RunLoop.main)
-            .sink { [weak self] active in
-                let hasActiveFocus = active != nil
-                Task { @MainActor [weak self] in
-                    self?.synchronizeVisibility(hasActiveFocus: hasActiveFocus)
-                }
+            .sink { [weak self] _ in
+                self?.synchronizeVisibility(animated: true)
+            }
+            .store(in: &cancellables)
+
+        experience.$hudVisibilityMode
+            .receive(on: RunLoop.main)
+            .sink { [weak self] mode in
+                guard let self else { return }
+                self.presentation.apply(mode: mode)
+                self.synchronizeVisibility(animated: true)
+            }
+            .store(in: &cancellables)
+
+        presentation.$isExpanded
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.synchronizeVisibility(animated: true)
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.positionPanel()
+                self?.positionPanel(animated: false)
             }
             .store(in: &cancellables)
     }
 
-    private func synchronizeVisibility(hasActiveFocus: Bool) {
-        if hasActiveFocus {
-            let panel = panel ?? makePanel()
-            self.panel = panel
-            positionPanel()
-            panel.orderFrontRegardless()
-        } else {
+    private func synchronizeVisibility(animated: Bool) {
+        guard focus.active != nil, experience.hudVisibilityMode != .hidden else {
             panel?.orderOut(nil)
+            return
         }
+
+        let panel = panel ?? makePanel()
+        self.panel = panel
+        positionPanel(animated: animated && panel.isVisible)
+        panel.orderFrontRegardless()
     }
 
     private func makePanel() -> FocusHUDPanel {
-        let size = NSSize(width: 640, height: 82)
+        let size = targetSize
         let panel = FocusHUDPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -337,28 +357,100 @@ private final class FocusHUDController: ObservableObject {
         .environmentObject(focus)
         .environmentObject(language)
         .environmentObject(experience)
+        .environmentObject(presentation)
         .environment(\.locale, language.current.locale)
 
         let hostingView = NSHostingView(rootView: content)
         hostingView.frame = NSRect(origin: .zero, size: size)
+        hostingView.autoresizingMask = [.width, .height]
         panel.contentView = hostingView
         return panel
     }
 
-    private func positionPanel() {
+    private var targetSize: NSSize {
+        experience.hudVisibilityMode == .onHover && !presentation.isExpanded
+            ? collapsedSize
+            : expandedSize
+    }
+
+    private func positionPanel(animated: Bool) {
         guard let panel, panel.isVisible || focus.active != nil else { return }
         let mouseLocation = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
             ?? NSScreen.main
             ?? NSScreen.screens.first
         guard let visibleFrame = screen?.visibleFrame else { return }
-        let origin = NSPoint(
-            x: visibleFrame.midX - panel.frame.width / 2,
-            y: visibleFrame.maxY - panel.frame.height - 10
+        let size = targetSize
+        let topInset: CGFloat = size == collapsedSize ? 2 : 10
+        let frame = NSRect(
+            x: visibleFrame.midX - size.width / 2,
+            y: visibleFrame.maxY - size.height - topInset,
+            width: size.width,
+            height: size.height
         )
-        panel.setFrameOrigin(origin)
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.18
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(frame, display: true)
+            }
+        } else {
+            panel.setFrame(frame, display: true)
+        }
     }
 
+}
+
+@MainActor
+final class FocusHUDPresentationState: ObservableObject {
+    @Published private(set) var isExpanded = true
+    private var collapseWorkItem: DispatchWorkItem?
+
+    func apply(mode: FocusHUDVisibilityMode) {
+        collapseWorkItem?.cancel()
+        collapseWorkItem = nil
+        isExpanded = mode == .always
+    }
+
+    func reveal() {
+        collapseWorkItem?.cancel()
+        collapseWorkItem = nil
+        isExpanded = true
+    }
+
+    func revealTemporarily() {
+        reveal()
+        scheduleCollapse()
+    }
+
+    func hoverChanged(_ isInside: Bool, mode: FocusHUDVisibilityMode) {
+        guard mode == .onHover else { return }
+        if isInside {
+            reveal()
+        } else {
+            scheduleCollapse()
+        }
+    }
+
+    private func scheduleCollapse() {
+        collapseWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if NSApp.windows.contains(where: Self.isVisiblePopover) {
+                self.scheduleCollapse()
+            } else {
+                self.isExpanded = false
+                self.collapseWorkItem = nil
+            }
+        }
+        collapseWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: workItem)
+    }
+
+    private static func isVisiblePopover(_ window: NSWindow) -> Bool {
+        window.isVisible
+            && String(describing: type(of: window)).localizedCaseInsensitiveContains("popover")
+    }
 }
 
 private final class FocusHUDPanel: NSPanel {
@@ -370,13 +462,17 @@ private struct FocusHUDView: View {
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var focus: FocusStore
     @EnvironmentObject private var experience: FocusExperienceController
+    @EnvironmentObject private var presentation: FocusHUDPresentationState
     @EnvironmentObject private var language: LanguageStore
     @State private var isSwitcherPresented = false
     @State private var switchSearch = ""
 
     var body: some View {
         Group {
-            if let review = experience.pendingIdleReview {
+            if experience.hudVisibilityMode == .onHover, !presentation.isExpanded,
+               let active = focus.active {
+                collapsedHUD(active)
+            } else if let review = experience.pendingIdleReview {
                 idleReviewHUD(review)
             } else if let currentBreak = experience.pomodoroBreak {
                 breakHUD(currentBreak)
@@ -386,15 +482,50 @@ private struct FocusHUDView: View {
                 Color.clear
             }
         }
+        .contentShape(Rectangle())
+        .onHover { isInside in
+            presentation.hoverChanged(isInside, mode: experience.hudVisibilityMode)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .taskDeckOpenFocusSwitcher)) { _ in
-            guard focus.active != nil, experience.pendingIdleReview == nil else { return }
+            guard focus.active != nil,
+                  experience.pendingIdleReview == nil,
+                  experience.hudVisibilityMode != .hidden else { return }
+            presentation.revealTemporarily()
             switchSearch = ""
-            isSwitcherPresented = true
+            DispatchQueue.main.async { isSwitcherPresented = true }
         }
         .onChange(of: focus.active?.taskID) { _ in
             isSwitcherPresented = false
             switchSearch = ""
         }
+    }
+
+    private func collapsedHUD(_ active: ActiveFocus) -> some View {
+        HStack(spacing: 7) {
+            Capsule()
+                .fill(active.isPaused ? DeckTheme.lime : DeckTheme.cyan)
+                .frame(width: 22, height: 3)
+                .shadow(color: active.isPaused ? DeckTheme.lime : DeckTheme.cyan, radius: 3)
+            Text(active.taskTitle)
+                .font(.system(size: 7, weight: .black))
+                .foregroundStyle(DeckTheme.muted)
+                .lineLimit(1)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 6, weight: .black))
+                .foregroundStyle(DeckTheme.cyan)
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DeckTheme.void.opacity(0.97))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(DeckTheme.cyan.opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityLabel(language.text(
+            "专注悬浮窗已收起，鼠标划过可展开",
+            "Focus controls collapsed; hover to expand"
+        ))
     }
 
     private func activeHUD(_ active: ActiveFocus) -> some View {

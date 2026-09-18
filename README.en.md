@@ -22,7 +22,7 @@ This repository is public to document TaskDeck's design, implementation, and ong
 - Receive reminders through macOS notifications
 - Start, pause, resume, and finish a focus session for a specific task
 - End focus without completing, end and complete, or end and switch to the next task, with an optional outcome note
-- Show an automatic top-of-screen focus HUD with pause, resume, and searchable task switching
+- Show the top focus HUD always, reveal it from a compact top-edge handle on hover, or hide it entirely
 - Optionally enable a Pomodoro timer with custom focus/break lengths, round alerts, and automatic breaks
 - Ask whether returned idle time should count, keeping focus reports accurate
 - Track the current completion streak and a 12-week activity heatmap
@@ -115,10 +115,11 @@ The public pipeline produces an arm64 + x86_64 Universal app, exports with Devel
 4. Use End Focus in the HUD to stop only, complete the task, or switch next, and optionally record an outcome.
 5. Press `⌘⌥K` for the searchable, direction-grouped switcher or `⌘⌥J` to return to a recent task.
 6. Use the pencil on a task card to change its name, estimated duration, or priority.
-7. Open Settings to change language, configure Pomodoro and idle detection, manage Trash, browse/restore automatic backups, import/export JSON, or reveal the data folder.
-8. Review daily, weekly, or monthly results and export a PDF from the report panel.
-9. Open the desktop board for an always-on-top compact view.
-10. Right-click the desktop, choose Edit Widgets, search for TaskDeck, and pick a small, medium, or large widget.
+7. Open Settings to change language and set the top focus HUD to Always Show, Show on Hover, or Hidden. Hover mode leaves a small handle at the top edge and expands the full controls when the pointer enters it.
+8. Settings also contains Pomodoro and idle-detection options, Trash, backup restore, JSON import/export, and the data-folder shortcut.
+9. Review daily, weekly, or monthly results and export a PDF from the report panel.
+10. Open the desktop board for an always-on-top compact view.
+11. Right-click the desktop, choose Edit Widgets, search for TaskDeck, and pick a small, medium, or large widget.
 
 ## Project Layout
 
@@ -133,6 +134,6 @@ outputs/            User guides, release notes, and sample reports
 
 ## Version
 
-Current version: TaskDeck 2.3.0 (Build 16).
+Current version: TaskDeck 2.3.1 (Build 17).
 
 TaskDeck is an actively evolving personal vibe-coding project. The public repository does not include tasks created by its author or users, and automated privacy checks run for every contribution.

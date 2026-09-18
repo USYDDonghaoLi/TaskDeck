@@ -7,8 +7,10 @@ import UserNotifications
 final class NotificationManager: ObservableObject {
     @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
 
-    init() {
-        refreshStatus()
+    init(refreshesStatus: Bool = true) {
+        if refreshesStatus {
+            refreshStatus()
+        }
     }
 
     func requestAuthorization() {
@@ -125,9 +127,50 @@ struct PomodoroBreak: Identifiable, Equatable, Sendable {
     }
 }
 
+enum FocusHUDVisibilityMode: String, CaseIterable, Identifiable, Sendable {
+    case always
+    case onHover
+    case hidden
+
+    var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .always: return "rectangle.fill.on.rectangle.fill"
+        case .onHover: return "rectangle.compress.vertical"
+        case .hidden: return "eye.slash.fill"
+        }
+    }
+
+    func title(in language: AppLanguage) -> String {
+        switch self {
+        case .always:
+            return language == .simplifiedChinese ? "始终显示" : "Always Show"
+        case .onHover:
+            return language == .simplifiedChinese ? "划过时显示" : "Show on Hover"
+        case .hidden:
+            return language == .simplifiedChinese ? "不显示" : "Hidden"
+        }
+    }
+
+    func detail(in language: AppLanguage) -> String {
+        switch self {
+        case .always:
+            return language == .simplifiedChinese ? "专注期间保持展开" : "Stay expanded while focusing"
+        case .onHover:
+            return language == .simplifiedChinese
+                ? "收在屏幕顶部，鼠标划过后展开"
+                : "Tuck into the top edge and expand on hover"
+        case .hidden:
+            return language == .simplifiedChinese ? "继续计时但隐藏悬浮窗" : "Keep timing without the HUD"
+        }
+    }
+}
+
 @MainActor
 final class FocusExperienceController: ObservableObject {
     private enum DefaultsKey {
+        static let hudVisibilityMode = "TaskDeck.focus.hudVisibilityMode"
         static let pomodoroEnabled = "TaskDeck.focus.pomodoroEnabled"
         static let focusMinutes = "TaskDeck.focus.focusMinutes"
         static let breakMinutes = "TaskDeck.focus.breakMinutes"
@@ -135,6 +178,12 @@ final class FocusExperienceController: ObservableObject {
         static let idleDetectionEnabled = "TaskDeck.focus.idleDetectionEnabled"
         static let idleThresholdMinutes = "TaskDeck.focus.idleThresholdMinutes"
         static let recentTaskIDs = "TaskDeck.focus.recentTaskIDs"
+    }
+
+    @Published var hudVisibilityMode: FocusHUDVisibilityMode {
+        didSet {
+            defaults.set(hudVisibilityMode.rawValue, forKey: DefaultsKey.hudVisibilityMode)
+        }
     }
 
     @Published var pomodoroEnabled: Bool {
@@ -221,6 +270,8 @@ final class FocusExperienceController: ObservableObject {
         self.language = language
         self.defaults = defaults
 
+        hudVisibilityMode = defaults.string(forKey: DefaultsKey.hudVisibilityMode)
+            .flatMap(FocusHUDVisibilityMode.init(rawValue:)) ?? .always
         pomodoroEnabled = defaults.object(forKey: DefaultsKey.pomodoroEnabled) as? Bool ?? false
         focusMinutes = Self.savedInteger(defaults, key: DefaultsKey.focusMinutes, fallback: 25, range: 1...180)
         breakMinutes = Self.savedInteger(defaults, key: DefaultsKey.breakMinutes, fallback: 5, range: 1...60)

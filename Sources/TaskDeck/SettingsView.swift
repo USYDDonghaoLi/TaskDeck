@@ -263,11 +263,26 @@ struct SettingsView: View {
             index: "03",
             title: language.text("专注体验", "Focus Experience"),
             subtitle: language.text(
-                "设置番茄钟、自动休息与闲置检测；这些偏好不会修改已有专注记录。",
-                "Configure Pomodoro rounds, automatic breaks, and idle detection without changing existing focus history."
+                "设置顶部悬浮窗、番茄钟、自动休息与闲置检测；这些偏好不会修改已有专注记录。",
+                "Configure the top HUD, Pomodoro rounds, automatic breaks, and idle detection without changing existing focus history."
             )
         ) {
             VStack(alignment: .leading, spacing: 13) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(language.text("顶部专注悬浮窗", "TOP FOCUS HUD"))
+                        .font(.system(size: 7, weight: .black))
+                        .tracking(0.8)
+                        .foregroundStyle(DeckTheme.muted)
+
+                    HStack(spacing: 8) {
+                        ForEach(FocusHUDVisibilityMode.allCases) { mode in
+                            hudModeButton(mode)
+                        }
+                    }
+                }
+
+                Rectangle().fill(DeckTheme.border).frame(height: 1)
+
                 Toggle(language.text("启用番茄钟与完成提醒", "Enable Pomodoro rounds and alerts"), isOn: $experience.pomodoroEnabled)
                     .toggleStyle(.switch)
                     .font(.system(size: 9, weight: .bold))
@@ -327,6 +342,41 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private func hudModeButton(_ mode: FocusHUDVisibilityMode) -> some View {
+        let isSelected = experience.hudVisibilityMode == mode
+        return Button {
+            experience.hudVisibilityMode = mode
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Image(systemName: mode.symbol)
+                        .font(.system(size: 10, weight: .bold))
+                    Text(mode.title(in: language.current))
+                        .font(.system(size: 8, weight: .black))
+                        .lineLimit(1)
+                }
+                Text(mode.detail(in: language.current))
+                    .font(.system(size: 6.5, weight: .medium))
+                    .foregroundStyle(isSelected ? DeckTheme.void.opacity(0.72) : DeckTheme.muted)
+                    .lineLimit(2)
+            }
+            .foregroundStyle(isSelected ? DeckTheme.void : DeckTheme.text)
+            .padding(9)
+            .frame(maxWidth: .infinity, minHeight: 66, alignment: .topLeading)
+            .background(isSelected ? DeckTheme.cyan : DeckTheme.panelRaised)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? DeckTheme.cyan : DeckTheme.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(mode.title(in: language.current))
+        .accessibilityValue(isSelected
+            ? language.text("已选择", "Selected")
+            : language.text("未选择", "Not selected"))
     }
 
     private func focusDurationField(

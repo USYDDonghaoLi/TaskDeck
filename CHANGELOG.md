@@ -2,6 +2,13 @@
 
 All notable TaskDeck changes are recorded here. Version numbers follow semantic versioning, while `CFBundleVersion` uses a monotonically increasing integer.
 
+## 2.3.1 (Build 17) - Configurable Focus HUD
+
+- Added Always Show, Show on Hover, and Hidden modes for the top focus HUD in Settings.
+- Added a compact top-edge handle that expands into the full focus controls when hovered, then retracts after the pointer leaves.
+- Kept open switcher and finish-action popovers visible while the pointer moves between the HUD and a menu.
+- Preserved Always Show as the default for existing users and kept all task and focus data untouched.
+
 ## 2.3.0 (Build 16) - Focus Experience
 
 - Decoupled stopping the timer from completing a task, with stop-only, complete, and switch-next actions plus an optional focus outcome note.
