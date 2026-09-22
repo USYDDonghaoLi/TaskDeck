@@ -2,6 +2,24 @@
 
 English | [简体中文](README.md)
 
+## Install on your Mac after forking
+
+You need an Apple Silicon Mac and the full Xcode app with Swift 6. The main app supports macOS 13+, while desktop widgets require macOS 14+. The current local packaging script builds for Apple Silicon only. Complete Xcode's license and component setup before your first build.
+
+1. Open the [TaskDeck repository](https://github.com/USYDDonghaoLi/TaskDeck) and click **Fork** in the upper-right corner to copy it to your GitHub account.
+2. In Terminal, clone your fork and build a local test bundle (replace `YOUR_GITHUB_USERNAME` with your GitHub username):
+
+   ```bash
+   git clone https://github.com/YOUR_GITHUB_USERNAME/TaskDeck.git
+   cd TaskDeck
+   zsh scripts/package_app.sh
+   ```
+
+3. When the build finishes, use Finder to move `outputs/TaskDeck.app` into Applications. If you already have TaskDeck installed, export a JSON backup from Settings, quit the app, and choose Replace. Avoid keeping multiple app copies with the same name. Replacing the app does not delete the task database in your user data folder.
+4. On first launch, if macOS shows a security warning, confirm that you trust the code in your fork, then right-click the app and choose Open. If macOS asks for access to TaskDeck's shared data folder, allow it so the app can read tasks and focus history.
+
+The script creates an **ad-hoc signed bundle for local testing only**; a paid Apple Developer membership is not needed for this step, but the desktop widget may not appear in the widget gallery. For a reliably available widget, configure the same Development Team for both targets as described under Build below. To distribute the app to others, use the proper signing and notarization workflow rather than sharing this test build. Forking does not itself grant redistribution or commercial-use rights; see Public Repository below.
+
 TaskDeck is a local-first, hacker-inspired native macOS app for task execution and focus tracking. Built with SwiftUI, it brings long-term directions, precise next actions, time estimates, focus sessions, and review reports into one workspace.
 
 ## Public Repository

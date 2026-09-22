@@ -2,6 +2,24 @@
 
 [English](README.en.md) | 简体中文
 
+## Fork 后在自己的 Mac 上安装
+
+需要 Apple Silicon Mac 和安装了 Swift 6 的完整版 Xcode；主应用支持 macOS 13+，桌面 Widget 需要 macOS 14+。当前本机打包脚本仅生成 Apple Silicon 版本。首次使用 Xcode 时，请先完成其许可协议和组件安装。
+
+1. 打开 [TaskDeck 仓库](https://github.com/USYDDonghaoLi/TaskDeck)，点击右上角 **Fork**，将仓库复制到自己的 GitHub 账号。
+2. 在“终端”中克隆自己的 Fork 并构建本机测试包（把 `YOUR_GITHUB_USERNAME` 换成你的 GitHub 用户名）：
+
+   ```bash
+   git clone https://github.com/YOUR_GITHUB_USERNAME/TaskDeck.git
+   cd TaskDeck
+   zsh scripts/package_app.sh
+   ```
+
+3. 构建成功后，在访达中将 `outputs/TaskDeck.app` 移到“应用程序”文件夹。若已安装旧版，先在应用的“设置”中导出 JSON 备份、退出 TaskDeck，再选择“替换”；不要同时保留多个同名应用副本。替换应用不会删除保存在用户资料目录中的任务数据库。
+4. 首次启动时，如果 macOS 提示安全确认，请确认代码来自你信任的 Fork，再右键应用选择“打开”；若系统询问是否允许访问 TaskDeck 的共享数据目录，请允许，以便读取任务和专注记录。
+
+此脚本生成的是 **ad-hoc 临时签名包，仅供本机测试**，不需要付费 Apple Developer 账号；系统桌面 Widget 可能不会出现在小组件库。要让 Widget 稳定可用，需按下文“构建”章节为主应用和 Widget 配置同一个 Development Team。要向他人分发，请走正式签名与公证流程，不能直接发送此测试包。Fork 功能也不等于获得重新分发或商业使用许可；参见下方“公开仓库说明”。
+
 TaskDeck 是一个本地优先、极客风格的原生 macOS TODO 与专注管理应用，使用 SwiftUI 构建。它把长期方向、精准行动、时间预估、专注计时和复盘报告放在同一个工作台中。
 
 ## 公开仓库说明
